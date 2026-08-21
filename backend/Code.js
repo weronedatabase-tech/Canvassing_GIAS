@@ -1,5 +1,5 @@
 const ROOT_FOLDER_ID = "1A8jf8VQ7B5zAc7D4sEcW-Kr04V3XTKWT"; 
-
+ 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('index')
     .setTitle('Fundraising Shop')
