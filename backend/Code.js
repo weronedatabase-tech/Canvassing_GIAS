@@ -1,0 +1,491 @@
+const ROOT_FOLDER_ID = "1A8jf8VQ7B5zAc7D4sEcW-Kr04V3XTKWT"; 
+
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('index')
+    .setTitle('Fundraising Shop')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function doPost(e) {
+  try {
+    const req = JSON.parse(e.postData.contents);
+    let data = null;
+    
+    switch(req.action) {
+      case 'INIT': 
+        data = getMasterConfig(); 
+        break;
+      case 'GET_STORE': 
+        data = getStoreProducts(req.eventId); 
+        break;
+      case 'ADMIN_SAVE_STORE': 
+        data = saveStoreConfig(req.payload); 
+        break;
+      case 'ADMIN_CREATE_STORE': 
+        data = createStore(req.name); 
+        break;
+      case 'ADMIN_SAVE_PRODUCT': 
+        data = saveProduct(req.eventId, req.product); 
+        break;
+      case 'ADMIN_DELETE_PRODUCT': 
+        data = deleteProduct(req.eventId, req.productId); 
+        break;
+      case 'ADMIN_REORDER_PRODUCTS': 
+        data = reorderProducts(req.eventId, req.productIds); 
+        break;
+      case 'SUBMIT_ORDER': 
+        data = submitOrder(req.eventId, req.order); 
+        break;
+      case 'ADMIN_GET_ORDERS': 
+        data = getOrders(req.eventId); 
+        break;
+      case 'ADMIN_UPDATE_ORDER': 
+        data = updateOrderStatus(req.eventId, req.orderId, req.status); 
+        break;
+      case 'ADMIN_DELETE_ORDER': 
+        data = deleteOrder(req.eventId, req.orderId); 
+        break;
+      default: 
+        throw new Error("Unknown action: " + req.action);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({ success: true, data: data }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function getRootFolder() {
+  return DriveApp.getFolderById(ROOT_FOLDER_ID);
+}
+
+function getMasterConfig() {
+  const root = getRootFolder();
+  const files = root.getFilesByName("master_config.json");
+  if (files.hasNext()) {
+    return JSON.parse(files.next().getBlob().getDataAsString());
+  }
+  
+  // Migration / Init
+  const folders = root.getFolders();
+  const stores = [];
+  while(folders.hasNext()) {
+    const f = folders.next();
+    if(f.getName() !== "Template Canvassing Event") {
+       stores.push({
+         id: f.getId(),
+         name: f.getName(),
+         isOpen: true,
+         closingDate: "",
+         infoHtml: "Welcome to " + f.getName(),
+         bannerImageId: null,
+         paynowNumber: "",
+         emailIntro: "",
+         emailFooter: ""
+       });
+    }
+  }
+  const config = { stores: stores };
+  root.createFile("master_config.json", JSON.stringify(config), MimeType.PLAIN_TEXT);
+  return config;
+}
+
+function saveMasterConfig(config) {
+  const root = getRootFolder();
+  const files = root.getFilesByName("master_config.json");
+  if (files.hasNext()) {
+    files.next().setContent(JSON.stringify(config));
+  } else {
+    root.createFile("master_config.json", JSON.stringify(config), MimeType.PLAIN_TEXT);
+  }
+}
+
+function saveStoreConfig(payload) {
+  const config = getMasterConfig();
+  const idx = config.stores.findIndex(s => s.id === payload.id);
+  
+  if (payload.imageBase64) {
+    // Upload new banner
+    const folder = DriveApp.getFolderById(payload.id);
+    const blob = Utilities.newBlob(Utilities.base64Decode(payload.imageBase64.split(',')[1]), payload.mimeType, `Banner_${Date.now()}`);
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    payload.bannerImageId = file.getId();
+    delete payload.imageBase64;
+    delete payload.mimeType;
+  }
+  
+  if (idx > -1) {
+    config.stores[idx] = { ...config.stores[idx], ...payload };
+  } else {
+    throw new Error("Store not found");
+  }
+  saveMasterConfig(config);
+  return config;
+}
+
+function createStore(name) {
+  if (!name) throw new Error("Store name required");
+  const root = getRootFolder();
+  const templates = root.getFoldersByName("Template Canvassing Event");
+  if (!templates.hasNext()) throw new Error("Template folder not found");
+  const template = templates.next();
+  
+  const newFolder = root.createFolder(name);
+  let sheetId = null;
+  const files = template.getFiles();
+  while (files.hasNext()) {
+    const f = files.next();
+    const copied = f.makeCopy(f.getName(), newFolder);
+    if (f.getMimeType() === MimeType.GOOGLE_SHEETS) {
+      copied.setName(name + " Orders");
+      sheetId = copied.getId();
+    }
+  }
+  newFolder.createFolder("Products");
+  
+  const config = getMasterConfig();
+  const newStore = {
+    id: newFolder.getId(),
+    name: name,
+    isOpen: false,
+    closingDate: "",
+    infoHtml: "Welcome to " + name,
+    bannerImageId: null,
+    paynowNumber: "",
+    emailIntro: "",
+    emailFooter: "",
+    sheetId: sheetId
+  };
+  config.stores.push(newStore);
+  saveMasterConfig(config);
+  return config;
+}
+
+function getStoreProducts(eventId) {
+  const folder = DriveApp.getFolderById(eventId);
+  const pFolders = folder.getFoldersByName("Products");
+  if (!pFolders.hasNext()) return [];
+  const pFolder = pFolders.next();
+  
+  const pFiles = pFolder.getFilesByName("products.json");
+  if (pFiles.hasNext()) {
+    return JSON.parse(pFiles.next().getBlob().getDataAsString());
+  }
+  
+  // Migration from legacy
+  const files = pFolder.getFiles();
+  const products = [];
+  while (files.hasNext()) {
+    const file = files.next();
+    if (file.getName() === "products.json") continue;
+    const nameParts = file.getName().split('_');
+    const price = parseFloat(nameParts.pop());
+    const name = nameParts.join('_');
+    if (!isNaN(price)) {
+      products.push({
+        id: file.getId(),
+        name: name,
+        description: "",
+        price: price,
+        imageId: file.getId()
+      });
+    }
+  }
+  pFolder.createFile("products.json", JSON.stringify(products), MimeType.PLAIN_TEXT);
+  return products;
+}
+
+function saveProduct(eventId, productData) {
+  const folder = DriveApp.getFolderById(eventId);
+  const pFolders = folder.getFoldersByName("Products");
+  let pFolder = pFolders.hasNext() ? pFolders.next() : folder.createFolder("Products");
+  
+  let products = [];
+  const pFiles = pFolder.getFilesByName("products.json");
+  let pFile = null;
+  if (pFiles.hasNext()) {
+    pFile = pFiles.next();
+    products = JSON.parse(pFile.getBlob().getDataAsString());
+  }
+  
+  if (productData.imageBase64) {
+    const blob = Utilities.newBlob(Utilities.base64Decode(productData.imageBase64.split(',')[1]), productData.mimeType, `Product_${Date.now()}`);
+    const imgFile = pFolder.createFile(blob);
+    imgFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    productData.imageId = imgFile.getId();
+    delete productData.imageBase64;
+    delete productData.mimeType;
+  }
+  
+  if (!productData.id) {
+    productData.id = 'prod_' + Date.now();
+    products.push(productData);
+  } else {
+    const idx = products.findIndex(p => p.id === productData.id);
+    if (idx > -1) {
+      products[idx] = { ...products[idx], ...productData };
+    } else {
+      products.push(productData);
+    }
+  }
+  
+  if (pFile) pFile.setContent(JSON.stringify(products));
+  else pFolder.createFile("products.json", JSON.stringify(products), MimeType.PLAIN_TEXT);
+  
+  return products;
+}
+
+function deleteProduct(eventId, productId) {
+  const folder = DriveApp.getFolderById(eventId);
+  const pFolders = folder.getFoldersByName("Products");
+  if (!pFolders.hasNext()) return [];
+  const pFolder = pFolders.next();
+  const pFiles = pFolder.getFilesByName("products.json");
+  if (pFiles.hasNext()) {
+    const pFile = pFiles.next();
+    let products = JSON.parse(pFile.getBlob().getDataAsString());
+    products = products.filter(p => p.id !== productId);
+    pFile.setContent(JSON.stringify(products));
+    return products;
+  }
+  return [];
+}
+
+function reorderProducts(eventId, productIds) {
+  const folder = DriveApp.getFolderById(eventId);
+  const pFolders = folder.getFoldersByName("Products");
+  if (!pFolders.hasNext()) return [];
+  const pFolder = pFolders.next();
+  const pFiles = pFolder.getFilesByName("products.json");
+  if (pFiles.hasNext()) {
+    const pFile = pFiles.next();
+    let products = JSON.parse(pFile.getBlob().getDataAsString());
+    
+    // Sort products based on the provided array of IDs
+    const reordered = [];
+    productIds.forEach(id => {
+      const p = products.find(prod => prod.id === id);
+      if (p) reordered.push(p);
+    });
+    
+    // Add any missing products at the end just in case
+    products.forEach(p => {
+      if (!productIds.includes(p.id)) reordered.push(p);
+    });
+
+    pFile.setContent(JSON.stringify(reordered));
+    return reordered;
+  }
+  return [];
+}
+
+function getSheetIdForEvent(eventId) {
+  const config = getMasterConfig();
+  const store = config.stores.find(s => s.id === eventId);
+  if (store && store.sheetId) return store.sheetId;
+  
+  const folder = DriveApp.getFolderById(eventId);
+  const sheets = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
+  if (sheets.hasNext()) return sheets.next().getId();
+  throw new Error("Sheet not found for event");
+}
+
+function submitOrder(eventId, data) {
+  const config = getMasterConfig();
+  const store = config.stores.find(s => s.id === eventId);
+  if (!store) throw new Error("Store not found");
+  
+  if (store.closingDate) {
+    const tz = Session.getScriptTimeZone();
+    const todayStr = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");
+    const closeStr = store.closingDate.substring(0, 10);
+    if (todayStr > closeStr) throw new Error("Shop is closed.");
+  }
+  if (!store.isOpen) throw new Error("Shop is currently closed.");
+
+  let imageUrl = "No Image";
+  if (data.paymentProofBase64) {
+    const folder = DriveApp.getFolderById(eventId);
+    const blob = Utilities.newBlob(Utilities.base64Decode(data.paymentProofBase64.split(',')[1]), data.mimeType, `Payment_${data.customerName}_${Date.now()}`);
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    imageUrl = file.getUrl();
+  }
+
+  // Use frontend-generated Order ID if available
+  const orderId = data.orderId || `ORD-${data.contact}-${Math.floor(1000 + Math.random() * 9000)}`;
+  
+  const rows = data.cart.map(item => [
+    orderId, new Date(), item.name, item.price, item.qty, (item.price * item.qty),
+    `${data.customerName}`,
+    "'" + data.contact, data.email, imageUrl, "Pending",
+    data.custType || "", data.custRelationName || ""
+  ]);
+
+  const sheetId = getSheetIdForEvent(eventId);
+  const ss = SpreadsheetApp.openById(sheetId);
+  const sheet = ss.getSheets()[0];
+  
+  // Make sure header has these columns if they're missing
+  if (sheet.getLastColumn() < 13) {
+      sheet.getRange(1, 12, 1, 2).setValues([["Customer Type", "Relation Name"]]);
+  }
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000); // Wait up to 10 seconds
+    if (rows.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+      SpreadsheetApp.flush(); // Ensure writes are completed
+    }
+  } catch (e) {
+    throw new Error("System is busy handling other orders. Please try checking out again.");
+  } finally {
+    lock.releaseLock();
+  }
+
+  let emailStatus = "Not Sent";
+  if (data.email && data.email.includes('@')) {
+    try {
+      const itemListHtml = data.cart.map(i => 
+        `<tr>
+           <td style="padding: 5px; border-bottom: 1px solid #eee;">${i.name}</td>
+           <td style="padding: 5px; border-bottom: 1px solid #eee;">$${i.price.toFixed(2)}</td>
+           <td style="padding: 5px; border-bottom: 1px solid #eee;">x${i.qty}</td>
+           <td style="padding: 5px; border-bottom: 1px solid #eee;">$${(i.price * i.qty).toFixed(2)}</td>
+         </tr>`
+      ).join('');
+
+      const customIntro = store.emailIntro ? store.emailIntro.replace(/\n/g, '<br>') : `Hi ${data.customerName},<br>Thank you for your support!`;
+      const customFooter = store.emailFooter ? store.emailFooter.replace(/\n/g, '<br>') : `Thank you.`;
+
+      const htmlBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+          <h2 style="color: #2563eb;">Order Confirmation</h2>
+          <p>${customIntro}</p>
+          <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 5px 0;"><strong>Order ID:</strong> ${orderId}</p>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <thead>
+              <tr style="background: #2563eb; color: white;">
+                <th style="padding: 8px; text-align: left;">Item</th>
+                <th style="padding: 8px; text-align: left;">Price</th>
+                <th style="padding: 8px; text-align: left;">Qty</th>
+                <th style="padding: 8px; text-align: left;">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>${itemListHtml}</tbody>
+            <tfoot>
+              <tr>
+                <td colspan="3" style="padding: 10px; text-align: right; font-weight: bold;">Total:</td>
+                <td style="padding: 10px; font-weight: bold; color: #2563eb;">$${data.totalAmount.toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+          <p style="font-size: 12px; color: #666;">${customFooter}</p>
+        </div>
+      `;
+
+      MailApp.sendEmail({ to: data.email, subject: `Order Confirmation: ${orderId}`, htmlBody: htmlBody });
+      emailStatus = "Sent";
+    } catch (e) {
+      emailStatus = "Failed: " + e.toString();
+    }
+  }
+
+  return { orderId: orderId, emailStatus: emailStatus };
+}
+
+function getOrders(eventId) {
+  const sheetId = getSheetIdForEvent(eventId);
+  const ss = SpreadsheetApp.openById(sheetId);
+  const sheet = ss.getSheets()[0];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return []; 
+  
+  const lastCol = Math.max(sheet.getLastColumn(), 13); 
+  const range = sheet.getRange(2, 1, lastRow - 1, lastCol);
+  const data = range.getValues();
+  
+  const orders = {};
+  data.forEach(row => {
+    const id = row[0];
+    if (!orders[id]) {
+       orders[id] = {
+         orderId: id, date: row[1], customer: row[6], contact: row[7],
+         email: row[8], imageUrl: row[9], status: row[10] || "Pending",
+         custType: row[11] || "", custRelationName: row[12] || "",
+         items: [], total: 0
+       };
+    }
+    const itemTotal = parseFloat(row[5]) || 0;
+    orders[id].items.push({ name: row[2], price: row[3], qty: row[4], total: itemTotal });
+    orders[id].total += itemTotal;
+  });
+  
+  return Object.values(orders).sort((a,b) => new Date(b.date) - new Date(a.date));
+}
+
+function updateOrderStatus(eventId, orderId, newStatus) {
+  const sheetId = getSheetIdForEvent(eventId);
+  const ss = SpreadsheetApp.openById(sheetId);
+  const sheet = ss.getSheets()[0];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error("No orders found.");
+  
+  const range = sheet.getRange(2, 1, lastRow - 1, 1);
+  const ids = range.getValues().flat();
+  
+  let found = false;
+  for (let i = 0; i < ids.length; i++) {
+    if (ids[i] == orderId) {
+      sheet.getRange(i + 2, 11).setValue(newStatus);
+      found = true;
+    }
+  }
+  if (!found) throw new Error("Order ID not found.");
+  return { success: true };
+}
+
+function deleteOrder(eventId, orderId) {
+  const sheetId = getSheetIdForEvent(eventId);
+  const ss = SpreadsheetApp.openById(sheetId);
+  const mainSheet = ss.getSheets()[0];
+  let deleteSheet = ss.getSheetByName("Deleted Orders");
+  
+  if (!deleteSheet) {
+    deleteSheet = ss.insertSheet("Deleted Orders");
+    const headerRange = mainSheet.getRange(1, 1, 1, mainSheet.getLastColumn());
+    deleteSheet.getRange(1, 1, 1, headerRange.getNumColumns()).setValues(headerRange.getValues());
+  }
+
+  const lastRow = mainSheet.getLastRow();
+  if (lastRow < 2) return { success: true };
+  
+  const ids = mainSheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+  let deletedCount = 0;
+  
+  // Must delete from bottom to top to preserve row indices during deletion
+  for (let i = ids.length - 1; i >= 0; i--) {
+    if (ids[i] == orderId) {
+      const rowNum = i + 2;
+      const rowData = mainSheet.getRange(rowNum, 1, 1, mainSheet.getLastColumn()).getValues();
+      deleteSheet.getRange(deleteSheet.getLastRow() + 1, 1, 1, rowData[0].length).setValues(rowData);
+      mainSheet.deleteRow(rowNum);
+      deletedCount++;
+    }
+  }
+  
+  if (deletedCount === 0) throw new Error("Order ID not found.");
+  return { success: true, deletedCount };
+}
+
+function forceEmailAuthorization() {
+  const quota = MailApp.getRemainingDailyQuota();
+  console.log("Email Quota Remaining: " + quota);
+}

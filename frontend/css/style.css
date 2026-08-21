@@ -1,0 +1,62 @@
+.loader { border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.fade-in { animation: fadeIn 0.3s ease-in-out; }
+
+/* Quill Editor Overrides for Dark Mode & Elegance */
+.ql-toolbar.ql-snow {
+    border: none !important;
+    border-bottom: 1px solid #e5e7eb !important;
+    background-color: #fafafa;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+.ql-container.ql-snow {
+    border: none !important;
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-size: 0.875rem !important;
+}
+.ql-editor {
+    min-height: 150px;
+}
+html.dark .ql-toolbar.ql-snow {
+    background-color: #1a1a1a;
+    border-bottom-color: #333 !important;
+}
+html.dark .ql-snow .ql-stroke {
+    stroke: #e5e7eb;
+}
+html.dark .ql-snow .ql-fill, html.dark .ql-snow .ql-stroke.ql-fill {
+    fill: #e5e7eb;
+}
+html.dark .ql-snow .ql-picker {
+    color: #e5e7eb;
+}
+html.dark .ql-snow .ql-picker-options {
+    background-color: #1a1a1a;
+    border-color: #333;
+}
+html.dark .ql-snow.ql-toolbar button:hover, 
+html.dark .ql-snow .ql-toolbar button:hover, 
+html.dark .ql-snow.ql-toolbar button:focus, 
+html.dark .ql-snow .ql-toolbar button:focus, 
+html.dark .ql-snow.ql-toolbar button.ql-active, 
+html.dark .ql-snow .ql-toolbar button.ql-active, 
+html.dark .ql-snow.ql-toolbar .ql-picker-label:hover, 
+html.dark .ql-snow .ql-toolbar .ql-picker-label:hover, 
+html.dark .ql-snow.ql-toolbar .ql-picker-label.ql-active, 
+html.dark .ql-snow .ql-toolbar .ql-picker-label.ql-active, 
+html.dark .ql-snow.ql-toolbar .ql-picker-item:hover, 
+html.dark .ql-snow .ql-toolbar .ql-picker-item:hover, 
+html.dark .ql-snow.ql-toolbar .ql-picker-item.ql-selected, 
+html.dark .ql-snow .ql-toolbar .ql-picker-item.ql-selected {
+    color: #fff;
+}
+html.dark .ql-snow.ql-toolbar button:hover .ql-stroke, 
+html.dark .ql-snow .ql-toolbar button:hover .ql-stroke {
+    stroke: #fff;
+}
+
+.password-toggle { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #666; }
+.crop-container { width: 100%; height: 250px; background: #eee; position: relative; overflow: hidden; }
+.crop-img { position: absolute; cursor: grab; transform-origin: top left; }

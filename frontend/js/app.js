@@ -1,0 +1,1018 @@
+const State = {
+    masterConfig: null,
+    activeStoreId: null,
+    products: [],
+    cart: [],
+    adminToken: localStorage.getItem('adminToken') || null,
+    ordersCache: []
+};
+
+function toggleDarkMode() {
+    const html = document.documentElement;
+    html.classList.toggle('dark');
+    localStorage.theme = html.classList.contains('dark') ? 'dark' : 'light';
+}
+
+function initTheme() {
+    if (localStorage.theme === 'dark') {
+        document.documentElement.classList.add('dark');
+    }
+}
+initTheme();
+
+function showLoading(show, text="Processing...") {
+    const el = document.getElementById('loadingOverlay');
+    document.getElementById('loadingText').innerText = text;
+    show ? el.classList.remove('hidden') : el.classList.add('hidden');
+}
+
+async function apiCall(action, payload = {}, skipLoading = false) {
+    if(!skipLoading) showLoading(true);
+    try {
+        const body = { action, ...payload };
+        if (State.adminToken) body.password = State.adminToken;
+        const res = await fetch('/api/gas', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        const json = await res.json();
+        
+        if (!json.success) {
+            // Detect if the user is hitting the old GAS deployment
+            if (json.message && (json.message.includes('Invalid Action') || json.message.includes('Unknown action'))) {
+                throw new Error("Backend Outdated! Please copy the latest contents of /backend/Code.js and paste it into your Google Apps Script editor. Then create a New Deployment.");
+            }
+            throw new Error(json.message);
+        }
+        return json.data;
+    } catch(e) {
+        alert("Error: " + e.message);
+        throw e;
+    } finally {
+        if(!skipLoading) showLoading(false);
+    }
+}
+
+// Router
+const Router = {
+    navigate: (view, params = {}) => {
+        const url = new URL(window.location);
+        url.searchParams.set('view', view);
+        for(let k in params) url.searchParams.set(k, params[k]);
+        history.pushState({ view, params }, '', url.toString());
+        renderView(view, params);
+    },
+    init: () => {
+        window.addEventListener('popstate', (e) => {
+            if (e.state && e.state.view) renderView(e.state.view, e.state.params);
+            else {
+                const params = new URLSearchParams(window.location.search);
+                renderView(params.get('view') || 'landing');
+            }
+        });
+        const params = new URLSearchParams(window.location.search);
+        renderView(params.get('view') || 'landing', Object.fromEntries(params.entries()));
+    }
+};
+
+async function renderView(view, params = {}) {
+    const container = document.getElementById('app-container');
+    document.getElementById('backBtn').classList.toggle('hidden', view === 'landing');
+    document.getElementById('headerCartIcon').classList.toggle('hidden', !['store_info', 'store_shop'].includes(view));
+    
+    container.innerHTML = '';
+    
+    if (view === 'landing') await renderLanding(container);
+    else if (view === 'store_info') await renderStoreInfo(container, params.id);
+    else if (view === 'store_shop') await renderStoreShop(container, params.id);
+    else if (view === 'cart') await renderCartPage(container);
+    else if (view === 'checkout') await renderCheckout(container);
+    else if (view === 'success') await renderSuccess(container, params);
+    else if (view === 'admin_login') renderAdminLogin(container);
+    else if (view === 'admin_dashboard') await renderAdminDashboard(container);
+}
+
+// ---- VIEWS ----
+
+async function loadMasterConfig(force = false) {
+    if (!State.masterConfig || force) {
+        State.masterConfig = await apiCall('INIT');
+    }
+    return State.masterConfig;
+}
+
+async function renderLanding(container) {
+    const config = await loadMasterConfig();
+    document.getElementById('appTitleDisplay').innerText = "Fundraising Hub";
+    
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    const openStores = config.stores.filter(s => {
+        if (!s.isOpen) return false;
+        if (s.closingDate) {
+            const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+            const closeStr = s.closingDate.substring(0, 10);
+            if (todayStr > closeStr) return false;
+        }
+        return true;
+    });
+
+    let html = `<div class="p-3 fade-in">
+        <h2 class="text-2xl font-display font-semibold mb-4 tracking-tight">Active Fundraisers</h2>
+        <div class="grid gap-4">`;
+        
+    if (openStores.length === 0) {
+        html += `<p class="text-gray-700 font-medium">No active fundraisers at the moment.</p>`;
+    } else {
+        html += openStores.map(s => `
+            <div onclick="Router.navigate('store_info', {id: '${s.id}'})" class="bg-white dark:bg-[#111] p-4 rounded-xl shadow-sm border border-gray-400 dark:border-gray-800 cursor-pointer hover:shadow-md transition-all active:scale-95 group">
+                ${s.bannerImageId ? `<img src="https://lh3.googleusercontent.com/d/${s.bannerImageId}" class="w-full h-36 object-cover rounded-lg mb-3 group-hover:opacity-95 transition-opacity">` : ''}
+                <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 transition-colors">${s.name}</h3>
+                <p class="text-sm font-semibold text-gray-700 mt-1"><i class="far fa-calendar-alt mr-1"></i> Closes: ${s.closingDate || 'No date set'}</p>
+            </div>
+        `).join('');
+    }
+    html += `</div></div>`;
+    container.innerHTML = html;
+}
+
+async function renderStoreInfo(container, storeId) {
+    const config = await loadMasterConfig();
+    const store = config.stores.find(s => s.id === storeId);
+    if (!store) return Router.navigate('landing');
+    
+    State.activeStoreId = storeId;
+    document.getElementById('appTitleDisplay').innerText = store.name;
+    
+    container.innerHTML = `
+        <div class="fade-in pb-8">
+            ${store.bannerImageId ? `<img src="https://lh3.googleusercontent.com/d/${store.bannerImageId}" class="w-full h-48 md:h-64 object-cover shadow-sm">` : ''}
+            <div class="p-4 max-w-xl mx-auto -mt-8 relative z-10">
+                <div class="bg-white dark:bg-[#111] p-5 rounded-2xl shadow-sm border border-gray-400 dark:border-gray-800">
+                    <button onclick="Router.navigate('store_shop', {id: '${storeId}'})" class="w-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 py-3 rounded-xl font-bold hover:shadow-lg transition-transform active:scale-95 text-lg mb-6 tracking-tight">Start Shopping</button>
+                    <div class="prose dark:prose-invert prose-p:text-gray-600 dark:prose-p:text-gray-400 max-w-none text-sm leading-relaxed mb-6">${store.infoHtml}</div>
+                    <button onclick="Router.navigate('store_shop', {id: '${storeId}'})" class="w-full bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white py-3 rounded-xl font-bold hover:shadow-md transition-transform active:scale-95 text-lg">Start Shopping</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function renderStoreShop(container, storeId) {
+    const config = await loadMasterConfig();
+    const store = config.stores.find(s => s.id === storeId);
+    if (!store) return;
+    
+    State.activeStoreId = storeId;
+    State.products = await apiCall('GET_STORE', { eventId: storeId });
+    updateCartCount();
+
+    container.innerHTML = `
+        <div class="p-4 fade-in pb-24">
+            <h2 class="text-xl font-bold flex items-center gap-2 mb-4"><i class="fas fa-store"></i> ${store.name} Items</h2>
+            <div class="grid grid-cols-1 gap-4" id="productList">
+                ${State.products.length === 0 ? '<p>No items.</p>' : State.products.map(p => {
+                    const inCart = State.cart.find(c => c.id === p.id);
+                    const qtyHtml = inCart 
+                        ? `<div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded-lg border border-blue-100 dark:border-gray-600">
+                            <button onclick="updateQty('${p.id}', -1)" class="w-10 h-10 font-bold text-xl text-blue-600 dark:text-blue-400">-</button>
+                            <span class="w-8 text-center font-bold" id="qty-${p.id}">${inCart.qty}</span>
+                            <button onclick="updateQty('${p.id}', 1)" class="w-10 h-10 font-bold text-xl text-blue-600 dark:text-blue-400">+</button>
+                           </div>`
+                        : `<button onclick="updateQty('${p.id}', 1)" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">Add to Cart</button>`;
+
+                    return `
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-3 flex gap-3 border dark:border-gray-700">
+                        ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-24 h-24 object-cover rounded-md">` : '<div class="w-24 h-24 bg-gray-200 rounded-md flex items-center justify-center text-gray-400">No Image</div>'}
+                        <div class="flex-1 flex flex-col justify-between">
+                            <div>
+                                <h3 class="font-bold text-lg leading-tight dark:text-white">${p.name}</h3>
+                                <p class="text-xs text-gray-700 line-clamp-2 mt-1">${p.description || ''}</p>
+                            </div>
+                            <div class="flex justify-between items-end mt-2">
+                                <span class="font-bold text-blue-600 dark:text-blue-400 text-lg">$${p.price.toFixed(2)}</span>
+                                <div id="btn-container-${p.id}">${qtyHtml}</div>
+                            </div>
+                        </div>
+                    </div>`
+                }).join('')}
+            </div>
+            
+            <div class="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t dark:border-gray-700 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-30">
+                <div class="max-w-lg mx-auto">
+                    <button onclick="Router.navigate('cart')" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg flex justify-between px-6 items-center">
+                        <span>View Cart</span>
+                        <span id="bottomTotal" class="bg-green-700 px-2 py-1 rounded text-sm">$${getCartTotal()}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function updateQty(id, delta) {
+    const product = State.products.find(p => p.id === id);
+    if (!product) return;
+    
+    let item = State.cart.find(c => c.id === id);
+    if (!item) {
+        if (delta > 0) {
+            item = { ...product, qty: 1 };
+            State.cart.push(item);
+        }
+    } else {
+        item.qty += delta;
+        if (item.qty <= 0) {
+            State.cart = State.cart.filter(c => c.id !== id);
+        }
+    }
+    updateCartCount();
+    
+    // Re-render button container for this product if we are on shop page
+    const btnContainer = document.getElementById(`btn-container-${id}`);
+    if (btnContainer) {
+        const inCart = State.cart.find(c => c.id === id);
+        btnContainer.innerHTML = inCart 
+            ? `<div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded-lg border border-blue-100 dark:border-gray-600">
+                <button onclick="updateQty('${id}', -1)" class="w-10 h-10 font-bold text-xl text-blue-600 dark:text-blue-400">-</button>
+                <span class="w-8 text-center font-bold">${inCart.qty}</span>
+                <button onclick="updateQty('${id}', 1)" class="w-10 h-10 font-bold text-xl text-blue-600 dark:text-blue-400">+</button>
+               </div>`
+            : `<button onclick="updateQty('${id}', 1)" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">Add to Cart</button>`;
+    }
+    
+    const totalEl = document.getElementById('bottomTotal');
+    if(totalEl) totalEl.innerText = `$${getCartTotal()}`;
+    
+    if (window.location.search.includes('view=cart')) renderCartPage(document.getElementById('app-container'));
+}
+
+function getCartTotal() {
+    return State.cart.reduce((s, c) => s + (c.price * c.qty), 0).toFixed(2);
+}
+
+function updateCartCount() {
+    const count = State.cart.reduce((s, c) => s + c.qty, 0);
+    const badge = document.getElementById('headerCartCount');
+    badge.innerText = count;
+    badge.classList.toggle('hidden', count === 0);
+}
+
+async function renderCartPage(container) {
+    if (State.cart.length === 0) {
+        container.innerHTML = `<div class="p-6 text-center"><p class="mb-4">Your cart is empty.</p><button onclick="Router.navigate('store_shop', {id: '${State.activeStoreId}'})" class="text-blue-600 underline">Back to Shop</button></div>`;
+        return;
+    }
+    
+    container.innerHTML = `
+        <div class="p-4 fade-in pb-24">
+            <h2 class="text-xl font-bold mb-4">Your Cart</h2>
+            <div class="space-y-3">
+                ${State.cart.map(c => `
+                    <div class="flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded shadow">
+                        <div>
+                            <p class="font-bold">${c.name}</p>
+                            <p class="text-sm text-gray-700">$${c.price.toFixed(2)} x ${c.qty} = <span class="font-bold text-gray-900 dark:text-white">$${(c.price * c.qty).toFixed(2)}</span></p>
+                        </div>
+                        <div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded border border-blue-100 dark:border-gray-600">
+                            <button onclick="updateQty('${c.id}', -1)" class="w-8 h-8 font-bold text-blue-600">-</button>
+                            <span class="w-6 text-center text-sm font-bold">${c.qty}</span>
+                            <button onclick="updateQty('${c.id}', 1)" class="w-8 h-8 font-bold text-blue-600">+</button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="mt-6 bg-white dark:bg-gray-800 p-4 rounded shadow">
+                <div class="flex justify-between font-bold text-lg"><span>Total:</span><span>$${getCartTotal()}</span></div>
+            </div>
+            
+            <div class="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t dark:border-gray-700 z-30">
+                <div class="max-w-lg mx-auto flex gap-2">
+                    <button onclick="Router.navigate('store_shop', {id: '${State.activeStoreId}'})" class="flex-1 bg-gray-200 dark:bg-gray-700 py-3 rounded-lg font-bold">Back</button>
+                    <button onclick="Router.navigate('checkout')" class="flex-[2] bg-green-600 text-white py-3 rounded-lg font-bold">Checkout</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Generate SGQR PayNow String
+function generatePayNowString(proxyValue, amount, ref) {
+    const tlv = (tag, val) => {
+        const v = String(val);
+        const l = v.length.toString().padStart(2, '0');
+        return `${tag}${l}${v}`;
+    };
+    
+    let proxyType = '0';
+    let formattedProxy = (proxyValue || '').trim();
+    if (formattedProxy.length === 8 && /^\d+$/.test(formattedProxy)) {
+        formattedProxy = '+65' + formattedProxy;
+    } else if (formattedProxy.length >= 9 && !formattedProxy.startsWith('+')) {
+        proxyType = '2'; // UEN
+    }
+    
+    let payload = tlv('00', '01') + tlv('01', '12'); 
+    
+    let accInfo = tlv('00', 'SG.PAYNOW') + tlv('01', proxyType) + tlv('02', formattedProxy) + tlv('03', '1'); // 1 means amount is not editable
+    payload += tlv('26', accInfo) + tlv('52', '0000') + tlv('53', '702');
+    
+    if (amount && parseFloat(amount) > 0) {
+        payload += tlv('54', parseFloat(amount).toFixed(2));
+    }
+    
+    payload += tlv('58', 'SG') + tlv('59', 'NA') + tlv('60', 'Singapore');
+    
+    if (ref) payload += tlv('62', tlv('01', ref));
+    payload += '6304'; 
+    
+    let crc = 0xFFFF;
+    for (let i = 0; i < payload.length; i++) {
+        crc ^= (payload.charCodeAt(i) << 8);
+        for (let j = 0; j < 8; j++) {
+            if ((crc & 0x8000) !== 0) {
+                crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+            } else {
+                crc = (crc << 1) & 0xFFFF;
+            }
+        }
+    }
+    crc = (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+    return payload + crc;
+}
+
+async function renderCheckout(container) {
+    const store = State.masterConfig.stores.find(s => s.id === State.activeStoreId);
+    
+    // Generate order ID early for the QR reference
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    const tempOrderId = `ORD-<PHONE>-${rand}`; 
+
+    container.innerHTML = `
+        <div class="p-4 fade-in pb-10">
+            <h2 class="text-xl font-bold mb-4">Checkout</h2>
+            
+            <form id="checkoutForm" onsubmit="handleOrderSubmit(event, '${rand}')" class="space-y-4">
+                
+                <div class="bg-white dark:bg-gray-800 p-4 rounded shadow border border-gray-400 dark:border-gray-700">
+                    <h3 class="font-bold mb-3 border-b pb-2 dark:border-gray-700">1. Your Details</h3>
+                    <div><label class="block text-xs font-bold text-gray-700 uppercase">Full Name</label><input type="text" id="custName" required class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
+                    <div class="grid grid-cols-2 gap-3 mt-3">
+                        <div><label class="block text-xs font-bold text-gray-700 uppercase">WhatsApp No.</label><input type="tel" id="custPhone" oninput="updateQrRef(this.value, '${rand}')" required pattern="^[89][0-9]{7}$" placeholder="8 digits" class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
+                        <div><label class="block text-xs font-bold text-gray-700 uppercase">Email</label><input type="email" id="custEmail" required class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="block text-xs font-bold text-gray-700 uppercase">I AM A...</label>
+                        <select id="custType" required onchange="handleCustTypeChange()" class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600">
+                            <option value="">Select...</option>
+                            <option value="Volunteer">Volunteer</option>
+                            <option value="Friend of Volunteer">Friend of Volunteer</option>
+                            <option value="Caregiver">Caregiver</option>
+                            <option value="Public">Public</option>
+                        </select>
+                    </div>
+                    <div id="custRelationContainer" class="hidden mt-3">
+                        <label id="custRelationLabel" class="block text-xs font-bold text-gray-700 uppercase">Name</label>
+                        <input type="text" id="custRelationName" class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600">
+                    </div>
+                </div>
+
+                <div id="paymentSection" class="hidden bg-white dark:bg-gray-800 border-2 border-purple-800 p-4 rounded shadow relative">
+                    <h3 class="font-bold mb-2">2. Payment</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">PayNow to the number below or scan QR.</p>
+                    
+                    <div class="flex items-center gap-4">
+                        <canvas id="qrCanvas" class="w-32 h-32 bg-white p-1 rounded"></canvas>
+                        <div>
+                            <p class="text-sm">Pay: <span class="text-xl font-bold text-purple-700 dark:text-purple-400">$${getCartTotal()}</span></p>
+                            <p class="text-sm">To: <span class="font-mono font-bold">${store.paynowNumber || 'Not Set'}</span></p>
+                            <p class="text-xs bg-purple-100 dark:bg-purple-900 px-2 py-1 rounded mt-1">Ref: <span id="qrRefDisplay" class="font-mono font-bold">ORD-____-${rand}</span></p>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Upload Successful Payment Screenshot</label>
+                        <input type="file" id="paymentProof" accept="image/*" required class="w-full text-sm">
+                    </div>
+                </div>
+                
+                <button type="submit" id="submitOrderBtn" class="hidden w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg">Confirm & Submit</button>
+            </form>
+        </div>
+    `;
+
+    // Render initial QR (will update when phone is typed)
+    renderQR(store.paynowNumber, getCartTotal(), `ORD-00000000-${rand}`);
+}
+
+function handleCustTypeChange() {
+    const type = document.getElementById('custType').value;
+    const container = document.getElementById('custRelationContainer');
+    const label = document.getElementById('custRelationLabel');
+    const input = document.getElementById('custRelationName');
+    
+    if (type === 'Friend of Volunteer') {
+        container.classList.remove('hidden');
+        label.innerText = "Volunteer's Name";
+        input.required = true;
+    } else if (type === 'Caregiver') {
+        container.classList.remove('hidden');
+        label.innerText = "Trainee's Name";
+        input.required = true;
+    } else {
+        container.classList.add('hidden');
+        input.required = false;
+        input.value = '';
+    }
+}
+
+function updateQrRef(phone, rand) {
+    const val = phone.length >= 4 ? phone : '____';
+    const ref = `ORD-${val}-${rand}`;
+    document.getElementById('qrRefDisplay').innerText = ref;
+    const store = State.masterConfig.stores.find(s => s.id === State.activeStoreId);
+    renderQR(store.paynowNumber, getCartTotal(), ref);
+    
+    const paymentSection = document.getElementById('paymentSection');
+    const submitBtn = document.getElementById('submitOrderBtn');
+    
+    if (/^[89]\d{7}$/.test(phone)) {
+        paymentSection.classList.remove('hidden');
+        submitBtn.classList.remove('hidden');
+    } else {
+        paymentSection.classList.add('hidden');
+        submitBtn.classList.add('hidden');
+    }
+}
+
+function renderQR(phone, amount, ref) {
+    if(!phone) return;
+    const str = generatePayNowString(phone, amount, ref);
+    new QRious({
+        element: document.getElementById('qrCanvas'),
+        value: str,
+        size: 200,
+        level: 'M'
+    });
+}
+
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+    });
+}
+
+async function handleOrderSubmit(e, rand) {
+    e.preventDefault();
+    const phone = document.getElementById('custPhone').value;
+    const name = document.getElementById('custName').value;
+    const email = document.getElementById('custEmail').value;
+    const custType = document.getElementById('custType').value;
+    const custRelationName = document.getElementById('custRelationName').value;
+    const fileInput = document.getElementById('paymentProof');
+    
+    let paymentProofBase64 = null, mimeType = null;
+    if(fileInput.files.length > 0) {
+        paymentProofBase64 = await compressImage(fileInput.files[0], 1000);
+        mimeType = 'image/jpeg';
+    }
+
+    const val = phone.length >= 4 ? phone : '____';
+    const finalOrderId = `ORD-${val}-${rand}`;
+
+    const payload = {
+        orderId: finalOrderId,
+        customerName: name, contact: phone, email: email,
+        custType: custType, custRelationName: custRelationName,
+        cart: State.cart, totalAmount: parseFloat(getCartTotal()),
+        paymentProofBase64, mimeType
+    };
+
+    const res = await apiCall('SUBMIT_ORDER', { eventId: State.activeStoreId, order: payload });
+    State.cart = [];
+    updateCartCount();
+    
+    if (res.emailStatus && res.emailStatus.startsWith("Failed")) {
+        alert("Order submitted, but failed to send confirmation email: " + res.emailStatus);
+    }
+    
+    Router.navigate('success', { orderId: res.orderId, email: email, emailStatus: res.emailStatus });
+}
+
+async function renderSuccess(container, params) {
+    container.innerHTML = `
+        <div class="p-6 fade-in flex flex-col items-center justify-center min-h-[60vh] text-center">
+            <div class="bg-green-100 dark:bg-green-900 p-4 rounded-full mb-4"><i class="fas fa-check text-4xl text-green-600 dark:text-green-400"></i></div>
+            <h2 class="text-2xl font-bold mb-2">Order Submitted!</h2>
+            <p class="mb-4">Order ID: <span class="font-mono font-bold">${params.orderId}</span></p>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">Confirmation sent to ${params.email}</p>
+            <button onclick="Router.navigate('landing')" class="text-blue-600 font-bold hover:underline">Back to Home</button>
+        </div>
+    `;
+}
+
+// ---- ADMIN ----
+
+function renderAdminLogin(container) {
+    container.innerHTML = `
+        <div class="p-6 flex justify-center mt-10 fade-in">
+            <form onsubmit="handleAdminLogin(event)" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-sm">
+                <h2 class="text-xl font-bold mb-4 text-center">Admin Access</h2>
+                <div class="relative mb-4">
+                    <input type="password" id="adminPwd" placeholder="Password" required class="w-full p-3 border border-gray-400 rounded dark:bg-gray-700 dark:border-gray-600 pr-10">
+                    <i class="fas fa-eye password-toggle" onclick="togglePassword(this, 'adminPwd')"></i>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded font-bold">Login</button>
+            </form>
+        </div>
+    `;
+}
+
+function togglePassword(icon, id) {
+    const input = document.getElementById(id);
+    if(input.type === 'password') { input.type = 'text'; icon.classList.replace('fa-eye', 'fa-eye-slash'); }
+    else { input.type = 'password'; icon.classList.replace('fa-eye-slash', 'fa-eye'); }
+}
+
+async function handleAdminLogin(e) {
+    e.preventDefault();
+    const pwd = document.getElementById('adminPwd').value;
+    try {
+        const res = await fetch('/api/admin/login', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({password: pwd})
+        });
+        const json = await res.json();
+        if(json.success) {
+            localStorage.setItem('adminToken', pwd);
+            State.adminToken = pwd;
+            Router.navigate('admin_dashboard');
+        } else alert("Invalid Password");
+    } catch(e) { alert("Login error"); }
+}
+
+async function renderAdminDashboard(container, forceRefresh = false) {
+    if(!State.adminToken) return Router.navigate('admin_login');
+    const config = await loadMasterConfig(forceRefresh);
+    
+    container.innerHTML = `
+        <div class="p-3 md:p-4 fade-in pb-16">
+            <div class="flex justify-between items-center mb-5">
+                <h2 class="text-2xl font-display font-bold">Dashboard</h2>
+                <div class="flex gap-3 text-sm font-semibold">
+                    <button onclick="renderAdminDashboard(document.getElementById('app-container'), true)" class="text-blue-600 hover:text-blue-700"><i class="fas fa-sync mr-1"></i> Refresh</button>
+                    <button onclick="localStorage.removeItem('adminToken'); State.adminToken = null; Router.navigate('landing')" class="text-red-500 hover:text-red-600">Logout</button>
+                </div>
+            </div>
+            
+            <div class="mb-5 bg-white dark:bg-[#111] p-4 md:p-5 rounded-2xl shadow-sm border border-gray-400 dark:border-gray-800">
+                <h3 class="font-bold mb-4 flex items-center justify-between text-lg">
+                    Stores
+                    <button onclick="createNewStorePrompt()" class="bg-gray-900 text-white dark:bg-white dark:text-gray-900 px-4 py-1.5 rounded-lg text-sm font-semibold transition-transform active:scale-95"><i class="fas fa-plus mr-1"></i> New</button>
+                </h3>
+                <div class="space-y-3">
+                    ${config.stores.map(s => {
+                        const today = new Date();
+                        today.setHours(0,0,0,0);
+                        const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+                        const closeStr = s.closingDate ? s.closingDate.substring(0, 10) : "";
+                        const isPastDate = s.closingDate ? todayStr > closeStr : false;
+                        const actuallyOpen = s.isOpen && !isPastDate;
+                        const statusText = isPastDate ? 'CLOSED (Past Date)' : (s.isOpen ? 'OPEN' : 'CLOSED');
+                        return `
+                        <div class="border border-gray-400 dark:border-gray-800 p-3.5 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition-all ${actuallyOpen ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-red-50/50 dark:bg-red-900/10'}">
+                            <div class="w-full sm:w-auto flex-1 pr-2">
+                                <h4 class="font-semibold text-gray-900 dark:text-gray-100 leading-tight">${s.name}</h4>
+                                <p class="text-xs mt-1 text-gray-700">Status: <span class="font-bold ${actuallyOpen ? 'text-green-600 dark:text-green-400' : 'text-red-500'}">${statusText}</span></p>
+                            </div>
+                            <div class="w-full sm:w-auto flex justify-end gap-2 text-sm shrink-0">
+                                <button onclick="toggleStoreStatus('${s.id}', ${!s.isOpen})" class="bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 px-3 py-1.5 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">${s.isOpen ? 'Set Closed' : 'Set Open'}</button>
+                                <button onclick="manageStore('${s.id}')" class="bg-gray-900 text-white dark:bg-white dark:text-gray-900 px-4 py-1.5 rounded-lg font-semibold transition-transform active:scale-95">Manage</button>
+                            </div>
+                        </div>
+                    `}).join('')}
+                </div>
+            </div>
+            
+            <div id="adminWorkArea"></div>
+        </div>
+    `;
+}
+
+async function createNewStorePrompt() {
+    const name = prompt("Enter new store name:");
+    if(name) {
+        await apiCall('ADMIN_CREATE_STORE', { name });
+        renderAdminDashboard(document.getElementById('app-container'), true);
+    }
+}
+
+async function toggleStoreStatus(storeId, isOpen) {
+    await apiCall('ADMIN_SAVE_STORE', { payload: { id: storeId, isOpen } });
+    renderAdminDashboard(document.getElementById('app-container'), true);
+}
+
+// Store Management UI
+function renderAdminProductsList(products, storeId) {
+    return products.map((p, index) => `
+        <div class="flex items-center gap-3 border border-gray-400 dark:border-gray-800 p-2.5 rounded-xl bg-white dark:bg-[#111]">
+            ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-12 h-12 object-cover rounded-lg">` : ''}
+            <div class="flex-1">
+                <p class="font-bold text-sm text-gray-900 dark:text-gray-100">${p.name}</p>
+                <p class="text-xs font-semibold text-gray-600 dark:text-gray-400 mt-0.5">$${p.price.toFixed(2)}</p>
+            </div>
+            <div class="flex flex-col items-center justify-center gap-1">
+                <button onclick="adminReorderProduct('${storeId}', '${p.id}', -1)" class="text-gray-400 hover:text-blue-500 transition-colors ${index === 0 ? 'invisible' : ''}"><i class="fas fa-chevron-up"></i></button>
+                <button onclick="adminReorderProduct('${storeId}', '${p.id}', 1)" class="text-gray-400 hover:text-blue-500 transition-colors ${index === products.length - 1 ? 'invisible' : ''}"><i class="fas fa-chevron-down"></i></button>
+            </div>
+            <button onclick="adminDeleteProduct('${storeId}', '${p.id}')" class="text-gray-400 hover:text-red-500 transition-colors p-2 ml-1"><i class="fas fa-trash"></i></button>
+        </div>
+    `).join('');
+}
+
+async function manageStore(storeId, initialTab = 'info') {
+    const config = State.masterConfig.stores.find(s => s.id === storeId);
+    const area = document.getElementById('adminWorkArea');
+    area.scrollIntoView({behavior: 'smooth'});
+    
+    // Fetch products and orders
+    const [products, orders] = await Promise.all([
+        apiCall('GET_STORE', { eventId: storeId }),
+        apiCall('ADMIN_GET_ORDERS', { eventId: storeId })
+    ]);
+    
+    State.ordersCache = orders;
+    State.productsCache = products;
+
+    area.innerHTML = `
+        <div class="bg-white dark:bg-[#111] p-4 md:p-5 rounded-2xl shadow-sm border border-gray-400 dark:border-gray-800 mb-6 fade-in">
+            <h3 class="text-xl font-display font-bold text-gray-900 dark:text-gray-100 mb-4">Managing: ${config.name}</h3>
+            
+            <!-- TABS -->
+            <div class="flex overflow-x-auto border-b border-gray-400 dark:border-gray-800 mb-4 text-sm font-semibold">
+                <button onclick="switchAdminTab('info')" id="tab-info" class="shrink-0 px-4 py-2 text-gray-900 dark:text-white border-b-2 border-gray-900 dark:border-white transition-colors">Info & Settings</button>
+                <button onclick="switchAdminTab('products')" id="tab-products" class="shrink-0 px-4 py-2 text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Products</button>
+                <button onclick="switchAdminTab('orders')" id="tab-orders" class="shrink-0 px-4 py-2 text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Orders</button>
+                <button onclick="switchAdminTab('summary')" id="tab-summary" class="shrink-0 px-4 py-2 text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Summary</button>
+            </div>
+
+            <!-- SETTINGS TAB -->
+            <div id="panel-info" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Fundraiser Name</label>
+                    <input type="text" id="stName" value="${config.name || ''}" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg dark:bg-[#1a1a1a] text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Closing Date</label>
+                    <input type="date" id="stClose" value="${config.closingDate ? config.closingDate.split('T')[0] : ''}" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg dark:bg-[#1a1a1a] text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">PayNow Number</label>
+                    <input type="text" id="stPaynow" value="${config.paynowNumber || ''}" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg dark:bg-[#1a1a1a] text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 transition-all">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Banner Image (Will overwrite existing)</label>
+                    <input type="file" id="stBanner" accept="image/*" class="w-full text-sm file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 dark:file:bg-gray-800 dark:file:text-gray-300">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Info Rich Text</label>
+                    <div class="border border-gray-400 dark:border-gray-800 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-gray-900 dark:focus-within:ring-gray-100 transition-all">
+                        <div id="stInfo" class="min-h-[120px] text-sm dark:bg-[#1a1a1a] bg-white">${config.infoHtml || ''}</div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Email Intro</label>
+                    <textarea id="stEmailIn" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg text-sm dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all overflow-hidden resize-none">${config.emailIntro || ''}</textarea>
+                </div>
+                <button onclick="saveStoreSettings('${storeId}')" class="w-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 py-2.5 rounded-lg font-bold shadow-md hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors active:scale-95">Save Settings</button>
+            </div>
+
+            <!-- PRODUCTS TAB -->
+            <div id="panel-products" class="hidden">
+                <div class="bg-gray-50 dark:bg-[#1a1a1a] p-3 md:p-4 rounded-xl border border-gray-400 dark:border-gray-800 mb-4">
+                    <h4 class="font-bold text-sm mb-3">Add Product</h4>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <input type="text" id="pName" placeholder="Name" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg text-sm dark:bg-[#222]">
+                        <input type="number" id="pPrice" placeholder="Price" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg text-sm dark:bg-[#222]">
+                    </div>
+                    <input type="text" id="pDesc" placeholder="Description" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg mb-2 text-sm dark:bg-[#222]">
+                    <div class="mb-3 relative">
+                        <label for="pImg" class="block w-full text-center p-2 border border-dashed border-gray-400 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Choose Product Image</label>
+                        <input type="file" id="pImg" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="this.previousElementSibling.textContent = this.files[0] ? this.files[0].name : 'Choose Product Image'">
+                    </div>
+                    <button onclick="adminAddProduct('${storeId}')" class="w-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 py-2 rounded-lg font-bold text-sm transition-transform active:scale-95">Add Item</button>
+                </div>
+                <div id="adminProductsList" class="space-y-2">
+                    ${renderAdminProductsList(products, storeId)}
+                </div>
+            </div>
+
+            <!-- ORDERS TAB -->
+            <div id="panel-orders" class="hidden">
+                <div class="relative mb-4 flex gap-2">
+                    <div class="relative flex-1">
+                        <i class="fas fa-search absolute left-3 top-3.5 text-gray-400 text-sm"></i>
+                        <input type="text" id="orderSearch" onkeyup="filterAdminOrders()" placeholder="Search Name, Phone, ID..." class="w-full px-9 py-3 border border-gray-400 dark:border-gray-800 rounded-lg text-sm dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-gray-900 transition-all">
+                        <button onclick="document.getElementById('orderSearch').value=''; filterAdminOrders();" class="absolute right-3 top-3.5 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors" title="Clear Search"><i class="fas fa-times"></i></button>
+                    </div>
+                    <select id="orderFilter" onchange="filterAdminOrders()" class="p-3 border border-gray-400 dark:border-gray-800 rounded-lg text-sm dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-gray-900 transition-all w-32 shrink-0">
+                        <option value="all">All</option>
+                        <option value="not_collected">Not Collected</option>
+                        <option value="collected">Collected</option>
+                    </select>
+                </div>
+                <div id="ordersList" class="space-y-3 h-[calc(100vh-280px)] overflow-y-auto pr-1">
+                    ${renderOrderList(orders, storeId)}
+                </div>
+            </div>
+
+            <!-- SUMMARY TAB -->
+            <div id="panel-summary" class="hidden">
+                ${renderAdminSummary(orders, products)}
+            </div>
+        </div>
+    `;
+
+    setTimeout(() => {
+        // Initialize Quill Rich Text
+        window.quillEditor = new Quill('#stInfo', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    [{ 'font': [] }],
+                    ['bold', 'italic', 'underline', 'strike'],
+                    [{ 'color': [] }, { 'background': [] }],
+                    ['emoji'],
+                    ['clean']
+                ],
+                "emoji-toolbar": true,
+                "emoji-shortname": true,
+            }
+        });
+
+        // Setup Auto-expanding Textarea
+        const emailIn = document.getElementById('stEmailIn');
+        if(emailIn) {
+            const autoExpand = function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            };
+            emailIn.addEventListener('input', autoExpand);
+            autoExpand.call(emailIn);
+        }
+        
+        switchAdminTab(initialTab);
+    }, 50);
+}
+
+function switchAdminTab(tab) {
+    ['info', 'products', 'orders', 'summary'].forEach(t => {
+        document.getElementById(`tab-${t}`).className = `shrink-0 px-4 py-3 font-semibold transition-colors ${t===tab ? 'text-gray-900 dark:text-white border-b-2 border-gray-900 dark:border-white' : 'text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'}`;
+        document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== tab);
+
+    });
+}
+
+// Image compressor helper
+function compressImage(file, maxSize = 800) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let w = img.width, h = img.height;
+                if (w > maxSize || h > maxSize) {
+                    if (w > h) { h = (h/w)*maxSize; w = maxSize; }
+                    else { w = (w/h)*maxSize; h = maxSize; }
+                }
+                canvas.width = w; canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+async function saveStoreSettings(id) {
+    const bannerInput = document.getElementById('stBanner');
+    let imageBase64 = null, mimeType = null;
+    if (bannerInput.files.length > 0) {
+        imageBase64 = await compressImage(bannerInput.files[0], 1200);
+        mimeType = 'image/jpeg';
+    }
+
+    let infoHtml = '';
+    const stInfo = document.getElementById('stInfo');
+    if (window.quillEditor) {
+        infoHtml = window.quillEditor.root.innerHTML;
+    } else if (stInfo) {
+        infoHtml = stInfo.innerHTML;
+    }
+
+    const payload = {
+        id,
+        name: document.getElementById('stName').value,
+        closingDate: document.getElementById('stClose').value,
+        paynowNumber: document.getElementById('stPaynow').value,
+        infoHtml: infoHtml,
+        emailIntro: document.getElementById('stEmailIn').value
+    };
+    if (imageBase64) {
+        payload.imageBase64 = imageBase64;
+        payload.mimeType = mimeType;
+    }
+    
+    await apiCall('ADMIN_SAVE_STORE', { payload });
+    renderAdminDashboard(document.getElementById('app-container'), true);
+}
+
+async function adminAddProduct(eventId) {
+    const fileInput = document.getElementById('pImg');
+    let imageBase64 = null, mimeType = null;
+    if (fileInput.files.length > 0) {
+        imageBase64 = await compressImage(fileInput.files[0], 500); // Smaller for product thumbnail
+        mimeType = 'image/jpeg';
+    }
+    const product = {
+        name: document.getElementById('pName').value,
+        price: parseFloat(document.getElementById('pPrice').value),
+        description: document.getElementById('pDesc').value,
+        imageBase64, mimeType
+    };
+    await apiCall('ADMIN_SAVE_PRODUCT', { eventId, product });
+    manageStore(eventId, 'products'); // reload section and stay on tab
+}
+
+async function adminDeleteProduct(eventId, productId) {
+    if(confirm("Delete item?")) {
+        await apiCall('ADMIN_DELETE_PRODUCT', { eventId, productId });
+        State.productsCache = State.productsCache.filter(p => p.id !== productId);
+        document.getElementById('adminProductsList').innerHTML = renderAdminProductsList(State.productsCache, eventId);
+    }
+}
+
+async function adminReorderProduct(eventId, productId, direction) {
+    const products = State.productsCache;
+    const idx = products.findIndex(p => p.id === productId);
+    if (idx === -1) return;
+
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= products.length) return;
+
+    // Swap
+    const temp = products[idx];
+    products[idx] = products[newIdx];
+    products[newIdx] = temp;
+
+    // Optimistically re-render products list to make it feel instant
+    document.getElementById('adminProductsList').innerHTML = renderAdminProductsList(State.productsCache, eventId);
+
+    // Save array of IDs in the new order
+    const productIds = products.map(p => p.id);
+    await apiCall('ADMIN_REORDER_PRODUCTS', { eventId, productIds }, true); // hide loading overlay so it feels fast
+}
+
+function renderOrderList(orders, storeId) {
+    if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700">No orders.</p>';
+    return orders.map(o => `
+        <div class="border p-3 rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-900 order-card" data-search="${o.customer.toLowerCase()} ${o.contact} ${o.orderId.toLowerCase()}" data-status="${o.status || 'Not Collected'}">
+            <div class="flex justify-between items-start mb-2">
+                <div>
+                    <p class="font-bold text-sm">${o.customer}</p>
+                    <p class="text-xs text-gray-700">${o.orderId} • ${o.contact}</p>
+                    ${o.custType ? `<p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1 font-bold">${o.custType} ${o.custRelationName ? `(${o.custRelationName})` : ''}</p>` : ''}
+                </div>
+                <div class="text-right">
+                    <p class="font-bold text-blue-600">$${o.total.toFixed(2)}</p>
+                </div>
+            </div>
+            <div class="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                ${o.items.map(i => `${i.qty}x ${i.name}`).join(', ')}
+            </div>
+            <div class="flex items-center gap-3 mt-3">
+                <label class="text-xs font-bold flex items-center gap-1 cursor-pointer">
+                    <input type="radio" name="status_${o.orderId}" value="Not Collected" ${o.status !== 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${o.orderId}', 'Not Collected')">
+                    <span class="text-red-500">Not Collected</span>
+                </label>
+                <label class="text-xs font-bold flex items-center gap-1 cursor-pointer">
+                    <input type="radio" name="status_${o.orderId}" value="Collected" ${o.status === 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${o.orderId}', 'Collected')">
+                    <span class="text-green-500">Collected</span>
+                </label>
+                ${o.imageUrl && o.imageUrl !== 'No Image' ? `<a href="${o.imageUrl}" target="_blank" class="text-xs text-blue-500 hover:text-blue-600 font-bold ml-auto mr-3">View Receipt</a>` : '<span class="ml-auto"></span>'}
+                <button onclick="adminDeleteOrder('${storeId}', '${o.orderId}')" class="text-gray-400 hover:text-red-500 transition-colors" title="Delete Order"><i class="fas fa-trash text-sm"></i></button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function filterAdminOrders() {
+    const term = document.getElementById('orderSearch').value.toLowerCase();
+    const filter = document.getElementById('orderFilter').value;
+    document.querySelectorAll('.order-card').forEach(card => {
+        const matchesSearch = card.getAttribute('data-search').includes(term);
+        const status = card.getAttribute('data-status');
+        
+        let matchesFilter = true;
+        if (filter === 'collected' && status !== 'Collected') matchesFilter = false;
+        if (filter === 'not_collected' && status === 'Collected') matchesFilter = false;
+
+        card.style.display = (matchesSearch && matchesFilter) ? 'block' : 'none';
+    });
+}
+
+function renderAdminSummary(orders, products) {
+    if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700">No orders yet.</p>';
+    
+    let totalRevenue = 0;
+    const itemStats = {};
+    
+    orders.forEach(o => {
+        totalRevenue += o.total;
+        o.items.forEach(item => {
+            if (!itemStats[item.name]) itemStats[item.name] = { qty: 0, revenue: 0 };
+            itemStats[item.name].qty += item.qty;
+            itemStats[item.name].revenue += item.total;
+        });
+    });
+    
+    let topSelling = { name: '-', qty: 0 };
+    Object.keys(itemStats).forEach(name => {
+        if (itemStats[name].qty > topSelling.qty) {
+            topSelling = { name, qty: itemStats[name].qty };
+        }
+    });
+    
+    const breakdownHtml = `
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="border-b border-gray-300">
+                    <th class="p-3 text-xs uppercase text-gray-700 font-bold">Item</th>
+                    <th class="p-3 text-xs uppercase text-gray-700 font-bold text-right">Price</th>
+                    <th class="p-3 text-xs uppercase text-gray-700 font-bold text-right">Sold</th>
+                    <th class="p-3 text-xs uppercase text-gray-700 font-bold text-right">Revenue</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${Object.keys(itemStats).map(name => {
+                    const price = (itemStats[name].revenue / itemStats[name].qty).toFixed(2);
+                    return `
+                    <tr class="border-b border-gray-200 last:border-0 hover:bg-gray-50">
+                        <td class="p-3 text-sm font-semibold text-gray-900">${name}</td>
+                        <td class="p-3 text-sm text-gray-700 text-right">$${price}</td>
+                        <td class="p-3 text-sm font-bold text-gray-900 text-right">${itemStats[name].qty}</td>
+                        <td class="p-3 text-sm font-bold text-green-700 text-right">$${itemStats[name].revenue.toFixed(2)}</td>
+                    </tr>
+                    `
+                }).join('')}
+            </tbody>
+        </table>
+    `;
+
+    return `
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800">
+                <p class="text-xs text-gray-700 uppercase font-bold mb-1">Total Revenue</p>
+                <p class="text-2xl font-bold text-green-600 dark:text-green-500">$${totalRevenue.toFixed(2)}</p>
+            </div>
+            <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800">
+                <p class="text-xs text-gray-700 uppercase font-bold mb-1">Total Orders</p>
+                <p class="text-2xl font-bold text-blue-600 dark:text-blue-500">${orders.length}</p>
+            </div>
+        </div>
+        <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800 mb-6">
+            <p class="text-xs text-gray-700 uppercase font-bold mb-1">Top Selling Item</p>
+            <p class="text-lg font-bold">${topSelling.name} <span class="text-sm text-gray-700 font-normal ml-1">(${topSelling.qty} units)</span></p>
+        </div>
+        
+        <h4 class="font-bold text-sm mb-3 text-gray-900">Item Breakdown</h4>
+        <div class="bg-white dark:bg-[#111] rounded-xl border border-gray-400 dark:border-gray-800 overflow-hidden">
+            ${breakdownHtml}
+        </div>
+    `;
+}
+
+async function updateOrdStatus(eventId, orderId, status) {
+    await apiCall('ADMIN_UPDATE_ORDER', { eventId, orderId, status }, true);
+    const idx = State.ordersCache.findIndex(o => o.orderId === orderId);
+    if(idx > -1) State.ordersCache[idx].status = status;
+    
+    // We only want to update the status in the UI but it's easier to just re-render the list and re-apply filters
+    document.getElementById('ordersList').innerHTML = renderOrderList(State.ordersCache, eventId);
+    filterAdminOrders();
+}
+
+async function adminDeleteOrder(eventId, orderId) {
+    if(!confirm('Are you sure you want to permanently delete this order? It will be moved to the "Deleted Orders" tab in your Google Sheet.')) return;
+    await apiCall('ADMIN_DELETE_ORDER', { eventId, orderId });
+    // Remove from cache and re-render
+    State.ordersCache = State.ordersCache.filter(x => x.orderId !== orderId);
+    document.getElementById('ordersList').innerHTML = renderOrderList(State.ordersCache, eventId);
+}
+
+// Initial Boot
+Router.init();
