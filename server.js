@@ -21,7 +21,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 // Proxy endpoint for GAS backend
 app.post('/api/gas', async (req, res) => {
   try {
-    const adminActions = ['ADMIN_SAVE_STORE', 'ADMIN_CREATE_STORE', 'ADMIN_SAVE_PRODUCT', 'ADMIN_DELETE_PRODUCT', 'ADMIN_GET_ORDERS', 'ADMIN_UPDATE_ORDER', 'ADMIN_REORDER_PRODUCTS', 'ADMIN_DELETE_ORDER'];
+    const adminActions = ['ADMIN_SAVE_STORE', 'ADMIN_CREATE_STORE', 'ADMIN_SAVE_PRODUCT', 'ADMIN_DELETE_PRODUCT', 'ADMIN_GET_ORDERS', 'ADMIN_UPDATE_ORDER', 'ADMIN_REORDER_PRODUCTS', 'ADMIN_DELETE_ORDER', 'ADMIN_EDIT_ORDER'];
     
     // Check AI Studio Secrets / Admin password
     if (adminActions.includes(req.body.action)) {

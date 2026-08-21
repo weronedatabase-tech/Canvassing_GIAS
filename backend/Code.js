@@ -43,6 +43,9 @@ function doPost(e) {
       case 'ADMIN_UPDATE_ORDER': 
         data = updateOrderStatus(req.eventId, req.orderId, req.status); 
         break;
+      case 'ADMIN_EDIT_ORDER': 
+        data = editOrder(req.eventId, req.orderId, req.updatedData); 
+        break;
       case 'ADMIN_DELETE_ORDER': 
         data = deleteOrder(req.eventId, req.orderId); 
         break;
@@ -443,7 +446,7 @@ function updateOrderStatus(eventId, orderId, newStatus) {
   
   let found = false;
   for (let i = 0; i < ids.length; i++) {
-    if (ids[i] == orderId) {
+    if (String(ids[i]).trim() === String(orderId).trim()) {
       sheet.getRange(i + 2, 11).setValue(newStatus);
       found = true;
     }
@@ -461,7 +464,7 @@ function deleteOrder(eventId, orderId) {
   if (!deleteSheet) {
     deleteSheet = ss.insertSheet("Deleted Orders");
     const headerRange = mainSheet.getRange(1, 1, 1, mainSheet.getLastColumn());
-    deleteSheet.getRange(1, 1, 1, headerRange.getNumColumns()).setValues(headerRange.getValues());
+    deleteSheet.appendRow(headerRange.getValues()[0]);
   }
 
   const lastRow = mainSheet.getLastRow();
@@ -472,10 +475,10 @@ function deleteOrder(eventId, orderId) {
   
   // Must delete from bottom to top to preserve row indices during deletion
   for (let i = ids.length - 1; i >= 0; i--) {
-    if (ids[i] == orderId) {
+    if (ids[i] && String(ids[i]).trim() === String(orderId).trim()) {
       const rowNum = i + 2;
       const rowData = mainSheet.getRange(rowNum, 1, 1, mainSheet.getLastColumn()).getValues();
-      deleteSheet.getRange(deleteSheet.getLastRow() + 1, 1, 1, rowData[0].length).setValues(rowData);
+      deleteSheet.appendRow(rowData[0]);
       mainSheet.deleteRow(rowNum);
       deletedCount++;
     }
@@ -488,4 +491,56 @@ function deleteOrder(eventId, orderId) {
 function forceEmailAuthorization() {
   const quota = MailApp.getRemainingDailyQuota();
   console.log("Email Quota Remaining: " + quota);
+}
+
+function editOrder(eventId, orderId, updatedData) {
+  const sheetId = getSheetIdForEvent(eventId);
+  const ss = SpreadsheetApp.openById(sheetId);
+  const sheet = ss.getSheets()[0];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error("No orders found.");
+  
+  const range = sheet.getRange(2, 1, lastRow - 1, 1);
+  const ids = range.getValues().flat();
+  
+  let existingRowIndices = [];
+  for (let i = 0; i < ids.length; i++) {
+    if (ids[i] && String(ids[i]).trim() === String(orderId).trim()) {
+      existingRowIndices.push(i + 2);
+    }
+  }
+  
+  if (existingRowIndices.length === 0) throw new Error("Order ID not found.");
+  
+  const firstRowData = sheet.getRange(existingRowIndices[0], 1, 1, 13).getValues()[0];
+  const date = firstRowData[1];
+  const email = firstRowData[8];
+  const imageUrl = firstRowData[9];
+  const status = firstRowData[10];
+  
+  const items = updatedData.items.filter(item => item.qty > 0);
+  
+  let i = 0;
+  for (; i < items.length; i++) {
+    const item = items[i];
+    const rowValues = [
+      orderId, date, item.name, item.price, item.qty, item.total,
+      updatedData.customer, "'" + updatedData.contact, email, imageUrl, status,
+      updatedData.custType || "", updatedData.custRelationName || ""
+    ];
+    
+    if (i < existingRowIndices.length) {
+      sheet.getRange(existingRowIndices[i], 1, 1, 13).setValues([rowValues]);
+    } else {
+      const insertAt = existingRowIndices[existingRowIndices.length - 1] + (i - existingRowIndices.length) + 1;
+      sheet.insertRowAfter(insertAt - 1);
+      sheet.getRange(insertAt, 1, 1, 13).setValues([rowValues]);
+    }
+  }
+  
+  for (let j = existingRowIndices.length - 1; j >= i; j--) {
+    sheet.deleteRow(existingRowIndices[j]);
+  }
+  
+  return { success: true };
 }

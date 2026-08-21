@@ -20,6 +20,44 @@ function initTheme() {
 }
 initTheme();
 
+function customAlert(msg) {
+    return new Promise(resolve => {
+        const div = document.createElement('div');
+        div.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/60';
+        div.innerHTML = `
+            <div class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border border-gray-200 dark:border-gray-800">
+                <h3 class="text-lg font-bold mb-3">Notice</h3>
+                <p class="text-sm text-gray-700 dark:text-gray-300 mb-6">${msg}</p>
+                <div class="flex justify-end">
+                    <button class="bg-gray-900 text-white dark:bg-white dark:text-black px-4 py-2 rounded-lg text-sm font-bold w-full" id="ca-ok">OK</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(div);
+        document.getElementById('ca-ok').onclick = () => { div.remove(); resolve(); };
+    });
+}
+
+function customConfirm(msg) {
+    return new Promise(resolve => {
+        const div = document.createElement('div');
+        div.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/60';
+        div.innerHTML = `
+            <div class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border border-gray-200 dark:border-gray-800">
+                <h3 class="text-lg font-bold mb-3">Confirm Action</h3>
+                <p class="text-sm text-gray-700 dark:text-gray-300 mb-6">${msg}</p>
+                <div class="flex justify-end gap-3">
+                    <button class="flex-1 bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 px-4 py-2 rounded-lg text-sm font-bold" id="cc-cancel">Cancel</button>
+                    <button class="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold" id="cc-ok">Confirm</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(div);
+        document.getElementById('cc-cancel').onclick = () => { div.remove(); resolve(false); };
+        document.getElementById('cc-ok').onclick = () => { div.remove(); resolve(true); };
+    });
+}
+
 function showLoading(show, text="Processing...") {
     const el = document.getElementById('loadingOverlay');
     document.getElementById('loadingText').innerText = text;
@@ -43,7 +81,7 @@ async function apiCall(action, payload = {}, skipLoading = false) {
         }
         return json.data;
     } catch(e) {
-        alert("Error: " + e.message);
+        customAlert(e.message);
         throw e;
     } finally {
         if(!skipLoading) showLoading(false);
@@ -494,7 +532,7 @@ async function handleOrderSubmit(e, rand) {
     updateCartCount();
     
     if (res.emailStatus && res.emailStatus.startsWith("Failed")) {
-        alert("Order submitted, but failed to send confirmation email: " + res.emailStatus);
+        customAlert("Order submitted, but failed to send confirmation email: " + res.emailStatus);
     }
     
     Router.navigate('success', { orderId: res.orderId, email: email, emailStatus: res.emailStatus });
@@ -548,8 +586,8 @@ async function handleAdminLogin(e) {
             localStorage.setItem('adminToken', pwd);
             State.adminToken = pwd;
             Router.navigate('admin_dashboard');
-        } else alert("Invalid Password");
-    } catch(e) { alert("Login error"); }
+        } else customAlert("Invalid Password");
+    } catch(e) { customAlert("Login error"); }
 }
 
 async function renderAdminDashboard(container, forceRefresh = false) {
@@ -849,7 +887,7 @@ async function adminAddProduct(eventId) {
 }
 
 async function adminDeleteProduct(eventId, productId) {
-    if(confirm("Delete item?")) {
+    if(await customConfirm("Delete item?")) {
         await apiCall('ADMIN_DELETE_PRODUCT', { eventId, productId });
         State.productsCache = State.productsCache.filter(p => p.id !== productId);
         document.getElementById('adminProductsList').innerHTML = renderAdminProductsList(State.productsCache, eventId);
@@ -880,7 +918,7 @@ async function adminReorderProduct(eventId, productId, direction) {
 function renderOrderList(orders, storeId) {
     if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700">No orders.</p>';
     return orders.map(o => `
-        <div class="border p-3 rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-900 order-card" data-search="${o.customer.toLowerCase()} ${o.contact} ${o.orderId.toLowerCase()}" data-status="${o.status || 'Not Collected'}">
+        <div class="border p-3 rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-900 order-card" data-id="${o.orderId}" data-search="${o.customer.toLowerCase()} ${o.contact} ${o.orderId.toLowerCase()}" data-status="${o.status || 'Not Collected'}">
             <div class="flex justify-between items-start mb-2">
                 <div>
                     <p class="font-bold text-sm">${o.customer}</p>
@@ -904,6 +942,7 @@ function renderOrderList(orders, storeId) {
                     <span class="text-green-500">Collected</span>
                 </label>
                 ${o.imageUrl && o.imageUrl !== 'No Image' ? `<a href="${o.imageUrl}" target="_blank" class="text-xs text-blue-500 hover:text-blue-600 font-bold ml-auto mr-3">View Receipt</a>` : '<span class="ml-auto"></span>'}
+                <button onclick="adminEditOrderModal('${storeId}', '${o.orderId}')" class="text-gray-400 hover:text-blue-500 transition-colors mr-3" title="Edit Order"><i class="fas fa-edit text-sm"></i></button>
                 <button onclick="adminDeleteOrder('${storeId}', '${o.orderId}')" class="text-gray-400 hover:text-red-500 transition-colors" title="Delete Order"><i class="fas fa-trash text-sm"></i></button>
             </div>
         </div>
@@ -1001,18 +1040,181 @@ async function updateOrdStatus(eventId, orderId, status) {
     const idx = State.ordersCache.findIndex(o => o.orderId === orderId);
     if(idx > -1) State.ordersCache[idx].status = status;
     
-    // We only want to update the status in the UI but it's easier to just re-render the list and re-apply filters
-    document.getElementById('ordersList').innerHTML = renderOrderList(State.ordersCache, eventId);
+    // Update the specific card's data-status for filtering without re-rendering everything
+    const card = document.querySelector(`.order-card[data-id="${orderId}"]`);
+    if (card) card.setAttribute('data-status', status);
+    
     filterAdminOrders();
 }
 
 async function adminDeleteOrder(eventId, orderId) {
-    if(!confirm('Are you sure you want to permanently delete this order? It will be moved to the "Deleted Orders" tab in your Google Sheet.')) return;
+    if(!await customConfirm('Are you sure you want to permanently delete this order? It will be moved to the "Deleted Orders" tab in your Google Sheet.')) return;
     await apiCall('ADMIN_DELETE_ORDER', { eventId, orderId });
-    // Remove from cache and re-render
+    // Remove from cache
     State.ordersCache = State.ordersCache.filter(x => x.orderId !== orderId);
-    document.getElementById('ordersList').innerHTML = renderOrderList(State.ordersCache, eventId);
+    
+    // Remove from DOM to prevent scrolling issues
+    const card = document.querySelector(`.order-card[data-id="${orderId}"]`);
+    if (card) {
+        card.remove();
+        if (State.ordersCache.length === 0) {
+            document.getElementById('ordersList').innerHTML = '<p class="text-sm text-gray-700">No orders.</p>';
+        }
+    } else {
+        document.getElementById('ordersList').innerHTML = renderOrderList(State.ordersCache, eventId);
+    }
+    
+    filterAdminOrders();
+    
+    const panelSummary = document.getElementById('panel-summary');
+    if (panelSummary) {
+        panelSummary.innerHTML = renderAdminSummary(State.ordersCache, State.productsCache);
+    }
 }
 
 // Initial Boot
 Router.init();
+
+function adminEditOrderModal(eventId, orderId) {
+    const order = State.ordersCache.find(o => o.orderId === orderId);
+    if (!order) return;
+
+    // Build product list (combining active products and items already in the order)
+    const allProductsMap = new Map();
+    State.productsCache.forEach(p => {
+        allProductsMap.set(p.name, { price: p.price, name: p.name });
+    });
+    order.items.forEach(i => {
+        if (!allProductsMap.has(i.name)) {
+            allProductsMap.set(i.name, { price: i.price, name: i.name });
+        }
+    });
+    const allProducts = Array.from(allProductsMap.values());
+
+    // Build the modal HTML
+    const div = document.createElement('div');
+    div.id = 'editOrderModal';
+    div.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/60';
+    
+    let productsHtml = allProducts.map(p => {
+        const existingItem = order.items.find(i => i.name === p.name);
+        const qty = existingItem ? existingItem.qty : 0;
+        return `
+            <div class="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-800">
+                <div class="flex flex-col">
+                    <span class="text-sm font-bold">${p.name}</span>
+                    <span class="text-xs text-gray-500">$${p.price.toFixed(2)}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" class="bg-gray-200 dark:bg-gray-800 rounded px-2 text-sm" onclick="this.nextElementSibling.value = Math.max(0, parseInt(this.nextElementSibling.value) - 1)">-</button>
+                    <input type="number" class="edit-qty-input w-12 text-center bg-gray-50 dark:bg-black border border-gray-300 dark:border-gray-700 rounded text-sm" data-name="${p.name}" data-price="${p.price}" value="${qty}" min="0">
+                    <button type="button" class="bg-gray-200 dark:bg-gray-800 rounded px-2 text-sm" onclick="this.previousElementSibling.value = parseInt(this.previousElementSibling.value) + 1">+</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    div.innerHTML = `
+        <div class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800 max-h-[90vh] overflow-y-auto relative">
+            <h3 class="text-lg font-bold mb-4">Edit Order: ${order.orderId}</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Customer Name</label>
+                    <input type="text" id="edit-customer" value="${order.customer}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Contact (Phone)</label>
+                    <input type="text" id="edit-contact" value="${order.contact}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Customer Type</label>
+                    <select id="edit-custType" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
+                        <option value="">None</option>
+                        <option value="Friend of Volunteer" ${order.custType === 'Friend of Volunteer' ? 'selected' : ''}>Friend of Volunteer</option>
+                        <option value="Current Volunteer" ${order.custType === 'Current Volunteer' ? 'selected' : ''}>Current Volunteer</option>
+                        <option value="Ex Volunteer" ${order.custType === 'Ex Volunteer' ? 'selected' : ''}>Ex Volunteer</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Relation Name (if applicable)</label>
+                    <input type="text" id="edit-relation" value="${order.custRelationName}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
+                </div>
+                
+                <div class="mt-4">
+                    <label class="block text-sm font-bold mb-2 border-b pb-1 dark:border-gray-800">Order Items</label>
+                    <div class="max-h-40 overflow-y-auto">
+                        ${productsHtml}
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-6">
+                <button class="flex-1 bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 px-4 py-2 rounded-lg text-sm font-bold" onclick="document.getElementById('editOrderModal').remove()">Cancel</button>
+                <button class="flex-1 bg-gray-900 text-white dark:bg-white dark:text-black px-4 py-2 rounded-lg text-sm font-bold" onclick="submitAdminEditOrder('${eventId}', '${orderId}')">Save Changes</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(div);
+}
+
+async function submitAdminEditOrder(eventId, orderId) {
+    const customer = document.getElementById('edit-customer').value;
+    const contact = document.getElementById('edit-contact').value;
+    const custType = document.getElementById('edit-custType').value;
+    const custRelationName = document.getElementById('edit-relation').value;
+    
+    if(!customer || !contact) {
+        customAlert("Name and Contact are required.");
+        return;
+    }
+
+    const items = [];
+    let total = 0;
+    document.querySelectorAll('.edit-qty-input').forEach(input => {
+        const qty = parseInt(input.value) || 0;
+        if (qty > 0) {
+            const name = input.getAttribute('data-name');
+            const price = parseFloat(input.getAttribute('data-price'));
+            const itemTotal = price * qty;
+            items.push({ name, price, qty, total: itemTotal });
+            total += itemTotal;
+        }
+    });
+
+    if (items.length === 0) {
+        customAlert("Order must have at least one item.");
+        return;
+    }
+
+    const updatedData = { customer, contact, custType, custRelationName, items, total };
+
+    document.getElementById('editOrderModal').remove();
+    try {
+        await apiCall('ADMIN_EDIT_ORDER', { eventId, orderId, updatedData });
+        
+        // Update cache
+        const idx = State.ordersCache.findIndex(o => o.orderId === orderId);
+        if (idx > -1) {
+            State.ordersCache[idx].customer = customer;
+            State.ordersCache[idx].contact = contact;
+            State.ordersCache[idx].custType = custType;
+            State.ordersCache[idx].custRelationName = custRelationName;
+            State.ordersCache[idx].items = items;
+            State.ordersCache[idx].total = total;
+        }
+        
+        // Render
+        document.getElementById('ordersList').innerHTML = renderOrderList(State.ordersCache, eventId);
+        filterAdminOrders();
+        
+        const panelSummary = document.getElementById('panel-summary');
+        if (panelSummary) {
+            panelSummary.innerHTML = renderAdminSummary(State.ordersCache, State.productsCache);
+        }
+        
+        customAlert("Order updated successfully!");
+    } catch(e) {
+        console.error(e);
+    }
+}
