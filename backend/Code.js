@@ -353,7 +353,7 @@ function submitOrder(eventId, data) {
   }
 
   // Use frontend-generated Order ID if available
-  const orderId = data.orderId || `ORD-${data.contact}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const orderId = data.orderId || `${store.name} - ${data.contact} - ${Math.floor(1000 + Math.random() * 9000)}`;
   
   const rows = data.cart.map(item => [
     orderId, new Date(), item.name, item.price, item.qty, (item.price * item.qty),

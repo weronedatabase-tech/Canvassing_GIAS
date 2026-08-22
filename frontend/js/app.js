@@ -432,7 +432,7 @@ async function renderCheckout(container) {
     
     // Generate order ID early for the QR reference
     const rand = Math.floor(1000 + Math.random() * 9000);
-    const tempOrderId = `ORD-<PHONE>-${rand}`; 
+    const tempOrderId = `${store.name} - <PHONE> - ${rand}`; 
 
     container.innerHTML = `
         <div class="p-4 fade-in pb-10">
@@ -472,7 +472,7 @@ async function renderCheckout(container) {
                         <div>
                             <p class="text-sm">Pay: <span class="text-xl font-bold text-purple-700 dark:text-purple-400">$${getCartTotal()}</span></p>
                             <p class="text-sm">To: <span class="font-mono font-bold">${store.paynowNumber || 'Not Set'}</span></p>
-                            <p class="text-xs bg-purple-100 dark:bg-purple-900 px-2 py-1 rounded mt-1">Ref: <span id="qrRefDisplay" class="font-mono font-bold">ORD-____-${rand}</span></p>
+                            <p class="text-xs bg-purple-100 dark:bg-purple-900 px-2 py-1 rounded mt-1">Ref: <span id="qrRefDisplay" class="font-mono font-bold">${store.name} - ____ - ${rand}</span></p>
                         </div>
                     </div>
                     
@@ -488,7 +488,7 @@ async function renderCheckout(container) {
     `;
 
     // Render initial QR (will update when phone is typed)
-    renderQR(store.paynowNumber, getCartTotal(), `ORD-00000000-${rand}`);
+    renderQR(store.paynowNumber, getCartTotal(), `${store.name} - 00000000 - ${rand}`);
 }
 
 function handleCustTypeChange() {
@@ -514,9 +514,9 @@ function handleCustTypeChange() {
 
 function updateQrRef(phone, rand) {
     const val = phone.length >= 4 ? phone : '____';
-    const ref = `ORD-${val}-${rand}`;
-    document.getElementById('qrRefDisplay').innerText = ref;
     const store = State.masterConfig.stores.find(s => s.id === State.activeStoreId);
+    const ref = `${store.name} - ${val} - ${rand}`;
+    document.getElementById('qrRefDisplay').innerText = ref;
     renderQR(store.paynowNumber, getCartTotal(), ref);
     
     const paymentSection = document.getElementById('paymentSection');
@@ -567,7 +567,8 @@ async function handleOrderSubmit(e, rand) {
     }
 
     const val = phone.length >= 4 ? phone : '____';
-    const finalOrderId = `ORD-${val}-${rand}`;
+    const store = State.masterConfig.stores.find(s => s.id === State.activeStoreId);
+    const finalOrderId = `${store.name} - ${val} - ${rand}`;
 
     const payload = {
         orderId: finalOrderId,
@@ -1026,8 +1027,12 @@ function renderOrderList(orders, storeId) {
             <div class="flex justify-between items-start mb-2">
                 <div>
                     <p class="font-bold text-sm">${o.customer}</p>
-                    <p class="text-xs text-gray-700">${o.orderId} • ${o.contact}</p>
+                    <p class="text-xs text-gray-700">${o.orderId}</p>
                     ${o.custType ? `<p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1 font-bold">${o.custType} ${o.custRelationName ? `(${o.custRelationName})` : ''}</p>` : ''}
+                    <div class="flex gap-2 mt-2">
+                        <a href="https://wa.me/65${o.contact.replace(/\D/g, '')}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white text-[10px] sm:text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"><i class="fab fa-whatsapp text-sm"></i> Msg / Call Customer</a>
+                        <button onclick="navigator.clipboard.writeText('${o.contact}'); customAlert('Phone number copied!');" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-[10px] sm:text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"><i class="fas fa-copy"></i> Copy Customer Phone No</button>
+                    </div>
                 </div>
                 <div class="text-right">
                     <p class="font-bold text-blue-600">$${o.total.toFixed(2)}</p>
@@ -1120,20 +1125,20 @@ function renderAdminSummary(orders, products) {
     return `
         <div class="grid grid-cols-2 gap-4 mb-6">
             <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800">
-                <p class="text-xs text-gray-700 uppercase font-bold mb-1">Total Revenue</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Total Revenue</p>
                 <p class="text-2xl font-bold text-green-600 dark:text-green-500">$${totalRevenue.toFixed(2)}</p>
             </div>
             <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800">
-                <p class="text-xs text-gray-700 uppercase font-bold mb-1">Total Orders</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Total Orders</p>
                 <p class="text-2xl font-bold text-blue-600 dark:text-blue-500">${orders.length}</p>
             </div>
         </div>
         <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800 mb-6">
-            <p class="text-xs text-gray-700 uppercase font-bold mb-1">Top Selling Item</p>
-            <p class="text-lg font-bold">${topSelling.name} <span class="text-sm text-gray-700 font-normal ml-1">(${topSelling.qty} units)</span></p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Top Selling Item</p>
+            <p class="text-lg font-bold text-gray-900 dark:text-gray-100">${topSelling.name} <span class="text-sm text-gray-500 dark:text-gray-400 font-normal ml-1">(${topSelling.qty} units)</span></p>
         </div>
         
-        <h4 class="font-bold text-sm mb-3 text-gray-900">Item Breakdown</h4>
+        <h4 class="font-bold text-sm mb-3 text-gray-900 dark:text-gray-100">Item Breakdown</h4>
         <div class="bg-white dark:bg-[#111] rounded-xl border border-gray-400 dark:border-gray-800 overflow-hidden">
             ${breakdownHtml}
         </div>
