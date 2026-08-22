@@ -46,6 +46,9 @@ function doPost(e) {
       case 'ADMIN_EDIT_ORDER': 
         data = editOrder(req.eventId, req.orderId, req.updatedData); 
         break;
+      case 'ADMIN_RESEND_EMAIL':
+        data = resendOrderEmail(req.eventId, req.orderId);
+        break;
       case 'ADMIN_DELETE_ORDER': 
         data = deleteOrder(req.eventId, req.orderId); 
         break;
@@ -353,55 +356,60 @@ function submitOrder(eventId, data) {
 
   let emailStatus = "Not Sent";
   if (data.email && data.email.includes('@')) {
-    try {
-      const itemListHtml = data.cart.map(i => 
-        `<tr>
-           <td style="padding: 5px; border-bottom: 1px solid #eee;">${i.name}</td>
-           <td style="padding: 5px; border-bottom: 1px solid #eee;">$${i.price.toFixed(2)}</td>
-           <td style="padding: 5px; border-bottom: 1px solid #eee;">x${i.qty}</td>
-           <td style="padding: 5px; border-bottom: 1px solid #eee;">$${(i.price * i.qty).toFixed(2)}</td>
-         </tr>`
-      ).join('');
-
-      const customIntro = store.emailIntro ? store.emailIntro.replace(/\n/g, '<br>') : `Hi ${data.customerName},<br>Thank you for your support!`;
-      const customFooter = store.emailFooter ? store.emailFooter.replace(/\n/g, '<br>') : `Thank you.`;
-
-      const htmlBody = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-          <h2 style="color: #2563eb;">Order Confirmation</h2>
-          <p>${customIntro}</p>
-          <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <p style="margin: 5px 0;"><strong>Order ID:</strong> ${orderId}</p>
-          </div>
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-            <thead>
-              <tr style="background: #2563eb; color: white;">
-                <th style="padding: 8px; text-align: left;">Item</th>
-                <th style="padding: 8px; text-align: left;">Price</th>
-                <th style="padding: 8px; text-align: left;">Qty</th>
-                <th style="padding: 8px; text-align: left;">Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>${itemListHtml}</tbody>
-            <tfoot>
-              <tr>
-                <td colspan="3" style="padding: 10px; text-align: right; font-weight: bold;">Total:</td>
-                <td style="padding: 10px; font-weight: bold; color: #2563eb;">$${data.totalAmount.toFixed(2)}</td>
-              </tr>
-            </tfoot>
-          </table>
-          <p style="font-size: 12px; color: #666;">${customFooter}</p>
-        </div>
-      `;
-
-      MailApp.sendEmail({ to: data.email, subject: `Order Confirmation: ${orderId}`, htmlBody: htmlBody });
-      emailStatus = "Sent";
-    } catch (e) {
-      emailStatus = "Failed: " + e.toString();
-    }
+    emailStatus = _sendOrderEmail(data.email, orderId, data.customerName, data.cart, data.totalAmount, store, false);
   }
 
   return { orderId: orderId, emailStatus: emailStatus };
+}
+
+function _sendOrderEmail(email, orderId, customerName, cart, totalAmount, store, isUpdate = false) {
+  try {
+    const itemListHtml = cart.map(i => 
+      `<tr>
+         <td style="padding: 5px; border-bottom: 1px solid #eee;">${i.name}</td>
+         <td style="padding: 5px; border-bottom: 1px solid #eee;">$${i.price.toFixed(2)}</td>
+         <td style="padding: 5px; border-bottom: 1px solid #eee;">x${i.qty}</td>
+         <td style="padding: 5px; border-bottom: 1px solid #eee;">$${(i.price * i.qty).toFixed(2)}</td>
+       </tr>`
+    ).join('');
+
+    const titleText = isUpdate ? "Updated Order Confirmation" : "Order Confirmation";
+    const customIntro = store.emailIntro ? store.emailIntro.replace(/\n/g, '<br>') : `Hi ${customerName},<br>Thank you for your support!`;
+    const customFooter = store.emailFooter ? store.emailFooter.replace(/\n/g, '<br>') : `Thank you.`;
+
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+        <h2 style="color: #2563eb;">${titleText}</h2>
+        <p>${customIntro}</p>
+        <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <p style="margin: 5px 0;"><strong>Order ID:</strong> ${orderId}</p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <thead>
+            <tr style="background: #2563eb; color: white;">
+              <th style="padding: 8px; text-align: left;">Item</th>
+              <th style="padding: 8px; text-align: left;">Price</th>
+              <th style="padding: 8px; text-align: left;">Qty</th>
+              <th style="padding: 8px; text-align: left;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>${itemListHtml}</tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" style="padding: 10px; text-align: right; font-weight: bold;">Total:</td>
+              <td style="padding: 10px; font-weight: bold; color: #2563eb;">$${parseFloat(totalAmount).toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        </table>
+        <p style="font-size: 12px; color: #666;">${customFooter}</p>
+      </div>
+    `;
+
+    MailApp.sendEmail({ to: email, subject: `${titleText}: ${orderId}`, htmlBody: htmlBody });
+    return "Sent";
+  } catch (e) {
+    return "Failed: " + e.toString();
+  }
 }
 
 function getOrders(eventId) {
@@ -514,7 +522,7 @@ function editOrder(eventId, orderId, updatedData) {
   
   const firstRowData = sheet.getRange(existingRowIndices[0], 1, 1, 13).getValues()[0];
   const date = firstRowData[1];
-  const email = firstRowData[8];
+  const email = updatedData.email !== undefined ? updatedData.email : firstRowData[8];
   const imageUrl = firstRowData[9];
   const status = firstRowData[10];
   
@@ -542,5 +550,60 @@ function editOrder(eventId, orderId, updatedData) {
     sheet.deleteRow(existingRowIndices[j]);
   }
   
-  return { success: true };
+  let emailStatus = null;
+  if (email && email.includes('@')) {
+    const config = getMasterConfig();
+    const store = config.stores.find(s => s.id === eventId);
+    emailStatus = _sendOrderEmail(email, orderId, updatedData.customer, items, updatedData.total, store, true);
+  }
+  
+  return { success: true, emailStatus: emailStatus };
+}
+
+function resendOrderEmail(eventId, orderId) {
+  const sheetId = getSheetIdForEvent(eventId);
+  const ss = SpreadsheetApp.openById(sheetId);
+  const sheet = ss.getSheets()[0];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error("No orders found.");
+  
+  const range = sheet.getRange(2, 1, lastRow - 1, 1);
+  const ids = range.getValues().flat();
+  
+  let existingRowIndices = [];
+  for (let i = 0; i < ids.length; i++) {
+    if (ids[i] && String(ids[i]).trim() === String(orderId).trim()) {
+      existingRowIndices.push(i + 2);
+    }
+  }
+  
+  if (existingRowIndices.length === 0) throw new Error("Order ID not found.");
+  
+  const firstRowData = sheet.getRange(existingRowIndices[0], 1, 1, 13).getValues()[0];
+  const customerName = firstRowData[6];
+  const email = firstRowData[8];
+  
+  if (!email || !email.includes('@')) {
+    throw new Error("No valid email address found for this order.");
+  }
+  
+  const items = [];
+  let totalAmount = 0;
+  
+  for (let i = 0; i < existingRowIndices.length; i++) {
+    const rowData = sheet.getRange(existingRowIndices[i], 1, 1, 13).getValues()[0];
+    const itemName = rowData[2];
+    const itemPrice = parseFloat(rowData[3]);
+    const itemQty = parseInt(rowData[4]);
+    const itemTotal = parseFloat(rowData[5]);
+    
+    items.push({ name: itemName, price: itemPrice, qty: itemQty });
+    totalAmount += itemTotal;
+  }
+  
+  const config = getMasterConfig();
+  const store = config.stores.find(s => s.id === eventId);
+  
+  const emailStatus = _sendOrderEmail(email, orderId, customerName, items, totalAmount, store, false);
+  return { emailStatus: emailStatus };
 }

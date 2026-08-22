@@ -1,11 +1,17 @@
 const State = {
-    masterConfig: null,
-    activeStoreId: null,
+    masterConfig: JSON.parse(sessionStorage.getItem('masterConfig')) || null,
+    activeStoreId: localStorage.getItem('activeStoreId') || null,
     products: [],
-    cart: [],
+    cart: JSON.parse(localStorage.getItem('cart')) || [],
     adminToken: localStorage.getItem('adminToken') || null,
     ordersCache: []
 };
+
+function saveState() {
+    if (State.masterConfig) sessionStorage.setItem('masterConfig', JSON.stringify(State.masterConfig));
+    if (State.activeStoreId) localStorage.setItem('activeStoreId', State.activeStoreId);
+    localStorage.setItem('cart', JSON.stringify(State.cart));
+}
 
 function toggleDarkMode() {
     const html = document.documentElement;
@@ -91,22 +97,49 @@ async function apiCall(action, payload = {}, skipLoading = false) {
 // Router
 const Router = {
     navigate: (view, params = {}) => {
-        const url = new URL(window.location);
-        url.searchParams.set('view', view);
-        for(let k in params) url.searchParams.set(k, params[k]);
-        history.pushState({ view, params }, '', url.toString());
-        renderView(view, params);
+        let path = '/';
+        if (view === 'store_info') path = `/store/${params.id}/info`;
+        else if (view === 'store_shop') path = `/store/${params.id}/shop`;
+        else if (view === 'cart') path = '/cart';
+        else if (view === 'checkout') path = '/checkout';
+        else if (view === 'admin_login') path = '/admin/login';
+        else if (view === 'admin_dashboard') path = '/admin/dashboard';
+        else if (view === 'admin_manage_store') path = `/admin/store/${params.id}`;
+        else if (view === 'success') {
+            const qs = new URLSearchParams(params).toString();
+            path = `/success?${qs}`;
+        }
+        
+        window.location.href = path; // True MPA behavior
     },
     init: () => {
-        window.addEventListener('popstate', (e) => {
-            if (e.state && e.state.view) renderView(e.state.view, e.state.params);
-            else {
-                const params = new URLSearchParams(window.location.search);
-                renderView(params.get('view') || 'landing');
-            }
-        });
-        const params = new URLSearchParams(window.location.search);
-        renderView(params.get('view') || 'landing', Object.fromEntries(params.entries()));
+        const path = window.location.pathname;
+        let view = 'landing';
+        let params = {};
+        
+        if (path.startsWith('/store/')) {
+            const parts = path.split('/');
+            params.id = parts[2];
+            view = parts[3] === 'shop' ? 'store_shop' : 'store_info';
+        } else if (path === '/cart') {
+            view = 'cart';
+        } else if (path === '/checkout') {
+            view = 'checkout';
+        } else if (path === '/admin/login') {
+            view = 'admin_login';
+        } else if (path === '/admin/dashboard') {
+            view = 'admin_dashboard';
+        } else if (path.startsWith('/admin/store/')) {
+            const parts = path.split('/');
+            params.id = parts[3];
+            view = 'admin_manage_store';
+        } else if (path === '/success') {
+            view = 'success';
+            const qs = new URLSearchParams(window.location.search);
+            params = Object.fromEntries(qs.entries());
+        }
+        
+        renderView(view, params);
     }
 };
 
@@ -125,6 +158,7 @@ async function renderView(view, params = {}) {
     else if (view === 'success') await renderSuccess(container, params);
     else if (view === 'admin_login') renderAdminLogin(container);
     else if (view === 'admin_dashboard') await renderAdminDashboard(container);
+    else if (view === 'admin_manage_store') await manageStore(params.id);
 }
 
 // ---- VIEWS ----
@@ -132,6 +166,7 @@ async function renderView(view, params = {}) {
 async function loadMasterConfig(force = false) {
     if (!State.masterConfig || force) {
         State.masterConfig = await apiCall('INIT');
+        saveState();
     }
     return State.masterConfig;
 }
@@ -178,6 +213,7 @@ async function renderStoreInfo(container, storeId) {
     if (!store) return Router.navigate('landing');
     
     State.activeStoreId = storeId;
+    saveState();
     document.getElementById('appTitleDisplay').innerText = store.name;
     
     container.innerHTML = `
@@ -200,7 +236,16 @@ async function renderStoreShop(container, storeId) {
     if (!store) return;
     
     State.activeStoreId = storeId;
-    State.products = await apiCall('GET_STORE', { eventId: storeId });
+    saveState();
+    
+    const cachedProducts = sessionStorage.getItem(`products_${storeId}`);
+    if (cachedProducts) {
+        State.products = JSON.parse(cachedProducts);
+    } else {
+        State.products = await apiCall('GET_STORE', { eventId: storeId });
+        sessionStorage.setItem(`products_${storeId}`, JSON.stringify(State.products));
+    }
+    
     updateCartCount();
 
     container.innerHTML = `
@@ -220,10 +265,10 @@ async function renderStoreShop(container, storeId) {
                     return `
                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-3 flex gap-3 border dark:border-gray-700">
                         ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-24 h-24 object-cover rounded-md">` : '<div class="w-24 h-24 bg-gray-200 rounded-md flex items-center justify-center text-gray-400">No Image</div>'}
-                        <div class="flex-1 flex flex-col justify-between">
+                        <div class="flex-1 min-w-0 flex flex-col justify-between">
                             <div>
-                                <h3 class="font-bold text-lg leading-tight dark:text-white">${p.name}</h3>
-                                <p class="text-xs text-gray-700 line-clamp-2 mt-1">${p.description || ''}</p>
+                                <h3 class="font-bold text-lg leading-tight dark:text-white break-words">${p.name}</h3>
+                                <p class="text-xs text-gray-700 line-clamp-2 mt-1 break-words">${p.description || ''}</p>
                             </div>
                             <div class="flex justify-between items-end mt-2">
                                 <span class="font-bold text-blue-600 dark:text-blue-400 text-lg">$${p.price.toFixed(2)}</span>
@@ -247,12 +292,11 @@ async function renderStoreShop(container, storeId) {
 }
 
 function updateQty(id, delta) {
-    const product = State.products.find(p => p.id === id);
-    if (!product) return;
-    
     let item = State.cart.find(c => c.id === id);
     if (!item) {
         if (delta > 0) {
+            const product = State.products.find(p => p.id === id);
+            if (!product) return;
             item = { ...product, qty: 1 };
             State.cart.push(item);
         }
@@ -263,6 +307,7 @@ function updateQty(id, delta) {
         }
     }
     updateCartCount();
+    saveState();
     
     // Re-render button container for this product if we are on shop page
     const btnContainer = document.getElementById(`btn-container-${id}`);
@@ -275,6 +320,11 @@ function updateQty(id, delta) {
                 <button onclick="updateQty('${id}', 1)" class="w-10 h-10 font-bold text-xl text-blue-600 dark:text-blue-400">+</button>
                </div>`
             : `<button onclick="updateQty('${id}', 1)" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">Add to Cart</button>`;
+    }
+    
+    // Re-render cart page completely if we are currently on it
+    if (window.location.pathname === '/cart') {
+        renderCartPage(document.getElementById('app-container'));
     }
     
     const totalEl = document.getElementById('bottomTotal');
@@ -530,6 +580,7 @@ async function handleOrderSubmit(e, rand) {
     const res = await apiCall('SUBMIT_ORDER', { eventId: State.activeStoreId, order: payload });
     State.cart = [];
     updateCartCount();
+    saveState();
     
     if (res.emailStatus && res.emailStatus.startsWith("Failed")) {
         customAlert("Order submitted, but failed to send confirmation email: " + res.emailStatus);
@@ -626,7 +677,7 @@ async function renderAdminDashboard(container, forceRefresh = false) {
                             </div>
                             <div class="w-full sm:w-auto flex justify-end gap-2 text-sm shrink-0">
                                 <button onclick="toggleStoreStatus('${s.id}', ${!s.isOpen})" class="bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 px-3 py-1.5 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">${s.isOpen ? 'Set Closed' : 'Set Open'}</button>
-                                <button onclick="manageStore('${s.id}')" class="bg-gray-900 text-white dark:bg-white dark:text-gray-900 px-4 py-1.5 rounded-lg font-semibold transition-transform active:scale-95">Manage</button>
+                                <button onclick="Router.navigate('admin_manage_store', {id: '${s.id}'})" class="bg-gray-900 text-white dark:bg-white dark:text-gray-900 px-4 py-1.5 rounded-lg font-semibold transition-transform active:scale-95">Manage</button>
                             </div>
                         </div>
                     `}).join('')}
@@ -654,15 +705,15 @@ async function toggleStoreStatus(storeId, isOpen) {
 // Store Management UI
 function renderAdminProductsList(products, storeId) {
     return products.map((p, index) => `
-        <div class="flex items-center gap-3 border border-gray-400 dark:border-gray-800 p-2.5 rounded-xl bg-white dark:bg-[#111]">
-            ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-12 h-12 object-cover rounded-lg">` : ''}
-            <div class="flex-1">
-                <p class="font-bold text-sm text-gray-900 dark:text-gray-100">${p.name}</p>
-                <p class="text-xs font-semibold text-gray-600 dark:text-gray-400 mt-0.5">$${p.price.toFixed(2)}</p>
+        <div class="flex items-center gap-3 border border-gray-400 dark:border-gray-800 p-2.5 rounded-xl bg-white dark:bg-[#111] product-item" data-id="${p.id}">
+            <div class="drag-handle cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 px-1 py-2">
+                <i class="fas fa-grip-vertical"></i>
             </div>
-            <div class="flex flex-col items-center justify-center gap-1">
-                <button onclick="adminReorderProduct('${storeId}', '${p.id}', -1)" class="text-gray-400 hover:text-blue-500 transition-colors ${index === 0 ? 'invisible' : ''}"><i class="fas fa-chevron-up"></i></button>
-                <button onclick="adminReorderProduct('${storeId}', '${p.id}', 1)" class="text-gray-400 hover:text-blue-500 transition-colors ${index === products.length - 1 ? 'invisible' : ''}"><i class="fas fa-chevron-down"></i></button>
+            ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-12 h-12 object-cover rounded-lg">` : ''}
+            <div class="flex-1 min-w-0">
+                <p class="font-bold text-sm text-gray-900 dark:text-gray-100 break-words">${p.name}</p>
+                ${p.description ? `<p class="text-xs text-gray-700 line-clamp-1 mt-0.5 break-words">${p.description}</p>` : ''}
+                <p class="text-xs font-semibold text-gray-600 dark:text-gray-400 mt-0.5">$${p.price.toFixed(2)}</p>
             </div>
             <button onclick="adminDeleteProduct('${storeId}', '${p.id}')" class="text-gray-400 hover:text-red-500 transition-colors p-2 ml-1"><i class="fas fa-trash"></i></button>
         </div>
@@ -687,7 +738,7 @@ async function manageStore(storeId, initialTab = 'info') {
         <div class="p-3 md:p-4 fade-in pb-16">
             <div class="flex items-center justify-between mb-5">
                 <div class="flex items-center gap-3">
-                    <button onclick="renderAdminDashboard(document.getElementById('app-container'))" class="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                    <button onclick="Router.navigate('admin_dashboard')" class="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
                         <i class="fas fa-arrow-left text-lg"></i>
                     </button>
                     <h2 class="text-xl md:text-2xl font-display font-bold text-gray-900 dark:text-gray-100">Managing: ${config.name}</h2>
@@ -808,6 +859,29 @@ async function manageStore(storeId, initialTab = 'info') {
             autoExpand.call(emailIn);
         }
         
+        // Setup Sortable for products
+        const productsListEl = document.getElementById('adminProductsList');
+        if (productsListEl && window.Sortable) {
+            new Sortable(productsListEl, {
+                handle: '.drag-handle',
+                animation: 150,
+                onEnd: async function (evt) {
+                    // Update cache array
+                    const itemEl = evt.item;
+                    const oldIndex = evt.oldIndex;
+                    const newIndex = evt.newIndex;
+                    if (oldIndex === newIndex) return;
+                    
+                    const movedItem = State.productsCache.splice(oldIndex, 1)[0];
+                    State.productsCache.splice(newIndex, 0, movedItem);
+                    
+                    // Save array of IDs in the new order
+                    const productIds = State.productsCache.map(p => p.id);
+                    await apiCall('ADMIN_REORDER_PRODUCTS', { eventId: storeId, productIds }, true);
+                }
+            });
+        }
+        
         switchAdminTab(initialTab);
     }, 50);
 }
@@ -902,26 +976,7 @@ async function adminDeleteProduct(eventId, productId) {
     }
 }
 
-async function adminReorderProduct(eventId, productId, direction) {
-    const products = State.productsCache;
-    const idx = products.findIndex(p => p.id === productId);
-    if (idx === -1) return;
 
-    const newIdx = idx + direction;
-    if (newIdx < 0 || newIdx >= products.length) return;
-
-    // Swap
-    const temp = products[idx];
-    products[idx] = products[newIdx];
-    products[newIdx] = temp;
-
-    // Optimistically re-render products list to make it feel instant
-    document.getElementById('adminProductsList').innerHTML = renderAdminProductsList(State.productsCache, eventId);
-
-    // Save array of IDs in the new order
-    const productIds = products.map(p => p.id);
-    await apiCall('ADMIN_REORDER_PRODUCTS', { eventId, productIds }, true); // hide loading overlay so it feels fast
-}
 
 function renderOrderList(orders, storeId) {
     if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700">No orders.</p>';
@@ -950,6 +1005,7 @@ function renderOrderList(orders, storeId) {
                     <span class="text-green-500">Collected</span>
                 </label>
                 ${o.imageUrl && o.imageUrl !== 'No Image' ? `<a href="${o.imageUrl}" target="_blank" class="text-xs text-blue-500 hover:text-blue-600 font-bold ml-auto mr-3">View Receipt</a>` : '<span class="ml-auto"></span>'}
+                <button onclick="adminResendEmail('${storeId}', '${o.orderId}')" class="text-gray-400 hover:text-blue-500 transition-colors mr-3" title="Resend Email"><i class="fas fa-envelope text-sm"></i></button>
                 <button onclick="adminEditOrderModal('${storeId}', '${o.orderId}')" class="text-gray-400 hover:text-blue-500 transition-colors mr-3" title="Edit Order"><i class="fas fa-edit text-sm"></i></button>
                 <button onclick="adminDeleteOrder('${storeId}', '${o.orderId}')" class="text-gray-400 hover:text-red-500 transition-colors" title="Delete Order"><i class="fas fa-trash text-sm"></i></button>
             </div>
@@ -1080,6 +1136,17 @@ async function adminDeleteOrder(eventId, orderId) {
     }
 }
 
+async function adminResendEmail(eventId, orderId) {
+    if (await customConfirm("Resend confirmation email to this customer?")) {
+        const res = await apiCall('ADMIN_RESEND_EMAIL', { eventId, orderId });
+        if (res && res.emailStatus && res.emailStatus === 'Sent') {
+            customAlert("Email sent successfully!");
+        } else {
+            customAlert("Failed to send email: " + (res.emailStatus || "Unknown error"));
+        }
+    }
+}
+
 // Initial Boot
 Router.init();
 
@@ -1136,6 +1203,10 @@ function adminEditOrderModal(eventId, orderId) {
                     <input type="text" id="edit-contact" value="${order.contact}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
                 </div>
                 <div>
+                    <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Email</label>
+                    <input type="email" id="edit-email" value="${order.email || ''}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
+                </div>
+                <div>
                     <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Customer Type</label>
                     <select id="edit-custType" onchange="handleAdminEditCustType()" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
                         <option value="">Select...</option>
@@ -1186,6 +1257,7 @@ window.handleAdminEditCustType = function() {
 async function submitAdminEditOrder(eventId, orderId) {
     const customer = document.getElementById('edit-customer').value;
     const contact = document.getElementById('edit-contact').value;
+    const email = document.getElementById('edit-email').value;
     const custType = document.getElementById('edit-custType').value;
     const custRelationName = document.getElementById('edit-relation').value;
     
@@ -1212,7 +1284,7 @@ async function submitAdminEditOrder(eventId, orderId) {
         return;
     }
 
-    const updatedData = { customer, contact, custType, custRelationName, items, total };
+    const updatedData = { customer, contact, email, custType, custRelationName, items, total };
 
     document.getElementById('editOrderModal').remove();
     try {
@@ -1223,6 +1295,7 @@ async function submitAdminEditOrder(eventId, orderId) {
         if (idx > -1) {
             State.ordersCache[idx].customer = customer;
             State.ordersCache[idx].contact = contact;
+            State.ordersCache[idx].email = email;
             State.ordersCache[idx].custType = custType;
             State.ordersCache[idx].custRelationName = custRelationName;
             State.ordersCache[idx].items = items;
