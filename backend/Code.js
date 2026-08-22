@@ -52,6 +52,9 @@ function doPost(e) {
       case 'ADMIN_DELETE_ORDER': 
         data = deleteOrder(req.eventId, req.orderId); 
         break;
+      case 'ADMIN_DELETE_EVENT':
+        data = deleteEvent(req.eventId);
+        break;
       default: 
         throw new Error("Unknown action: " + req.action);
     }
@@ -131,6 +134,33 @@ function saveStoreConfig(payload) {
   }
   saveMasterConfig(config);
   return config;
+}
+
+function deleteEvent(eventId) {
+  const root = getRootFolder();
+  
+  // Find or create "Archived_Deleted"
+  let archiveFolder;
+  const archives = root.getFoldersByName("Archived_Deleted");
+  if (archives.hasNext()) {
+    archiveFolder = archives.next();
+  } else {
+    archiveFolder = root.createFolder("Archived_Deleted");
+  }
+
+  // Move the event folder
+  try {
+    const eventFolder = DriveApp.getFolderById(eventId);
+    eventFolder.moveTo(archiveFolder);
+  } catch (e) {
+    // Ignore if not found or no permissions
+  }
+
+  const config = getMasterConfig();
+  config.stores = config.stores.filter(s => s.id !== eventId);
+  saveMasterConfig(config);
+  
+  return { success: true };
 }
 
 function createStore(name) {

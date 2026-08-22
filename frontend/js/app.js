@@ -675,9 +675,10 @@ async function renderAdminDashboard(container, forceRefresh = false) {
                                 <h4 class="font-semibold text-gray-900 dark:text-gray-100 leading-tight">${s.name}</h4>
                                 <p class="text-xs mt-1 text-gray-700">Status: <span class="font-bold ${actuallyOpen ? 'text-green-600 dark:text-green-400' : 'text-red-500'}">${statusText}</span></p>
                             </div>
-                            <div class="w-full sm:w-auto flex justify-end gap-2 text-sm shrink-0">
+                            <div class="w-full sm:w-auto flex justify-end gap-2 text-sm shrink-0 items-center">
                                 <button onclick="toggleStoreStatus('${s.id}', ${!s.isOpen})" class="bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 px-3 py-1.5 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">${s.isOpen ? 'Set Closed' : 'Set Open'}</button>
                                 <button onclick="Router.navigate('admin_manage_store', {id: '${s.id}'})" class="bg-gray-900 text-white dark:bg-white dark:text-gray-900 px-4 py-1.5 rounded-lg font-semibold transition-transform active:scale-95">Manage</button>
+                                <button onclick="promptDeleteEvent('${s.id}', '${s.name.replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-red-500 transition-colors p-2 ml-1" title="Delete Event"><i class="fas fa-trash"></i></button>
                             </div>
                         </div>
                     `}).join('')}
@@ -687,6 +688,46 @@ async function renderAdminDashboard(container, forceRefresh = false) {
             <div id="adminWorkArea"></div>
         </div>
     `;
+}
+
+async function promptDeleteEvent(eventId, eventName) {
+    const div = document.createElement('div');
+    div.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/60';
+    div.innerHTML = `
+        <div class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border border-gray-200 dark:border-gray-800">
+            <h3 class="text-lg font-bold mb-3 text-red-600">Delete Event</h3>
+            <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">You are about to delete <strong>${eventName}</strong>.</p>
+            <p class="text-xs text-gray-500 mb-4">This action cannot be undone. To confirm, type <strong>delete</strong> below:</p>
+            <input type="text" id="delete-confirm-input" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-red-500 mb-6" placeholder="Type delete here">
+            <div class="flex justify-end gap-3">
+                <button class="flex-1 bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 px-4 py-2 rounded-lg text-sm font-bold" id="cd-cancel">Cancel</button>
+                <button class="flex-1 bg-gray-300 text-white px-4 py-2 rounded-lg text-sm font-bold cursor-not-allowed transition-colors" id="cd-ok" disabled>Delete Event</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(div);
+
+    const input = document.getElementById('delete-confirm-input');
+    const okBtn = document.getElementById('cd-ok');
+
+    input.addEventListener('input', (e) => {
+        if (e.target.value === 'delete') {
+            okBtn.disabled = false;
+            okBtn.classList.remove('bg-gray-300', 'cursor-not-allowed');
+            okBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+        } else {
+            okBtn.disabled = true;
+            okBtn.classList.add('bg-gray-300', 'cursor-not-allowed');
+            okBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+        }
+    });
+
+    document.getElementById('cd-cancel').onclick = () => { div.remove(); };
+    okBtn.onclick = async () => { 
+        div.remove(); 
+        await apiCall('ADMIN_DELETE_EVENT', { eventId });
+        renderAdminDashboard(document.getElementById('app-container'), true);
+    };
 }
 
 async function createNewStorePrompt() {
