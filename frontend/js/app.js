@@ -671,8 +671,8 @@ function renderAdminProductsList(products, storeId) {
 
 async function manageStore(storeId, initialTab = 'info') {
     const config = State.masterConfig.stores.find(s => s.id === storeId);
-    const area = document.getElementById('adminWorkArea');
-    area.scrollIntoView({behavior: 'smooth'});
+    const area = document.getElementById('app-container');
+    window.scrollTo(0, 0);
     
     // Fetch products and orders
     const [products, orders] = await Promise.all([
@@ -684,16 +684,23 @@ async function manageStore(storeId, initialTab = 'info') {
     State.productsCache = products;
 
     area.innerHTML = `
-        <div class="bg-white dark:bg-[#111] p-4 md:p-5 rounded-2xl shadow-sm border border-gray-400 dark:border-gray-800 mb-6 fade-in">
-            <h3 class="text-xl font-display font-bold text-gray-900 dark:text-gray-100 mb-4">Managing: ${config.name}</h3>
-            
-            <!-- TABS -->
-            <div class="flex overflow-x-auto border-b border-gray-400 dark:border-gray-800 mb-4 text-sm font-semibold">
-                <button onclick="switchAdminTab('info')" id="tab-info" class="shrink-0 px-4 py-2 text-gray-900 dark:text-white border-b-2 border-gray-900 dark:border-white transition-colors">Info & Settings</button>
-                <button onclick="switchAdminTab('products')" id="tab-products" class="shrink-0 px-4 py-2 text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Products</button>
-                <button onclick="switchAdminTab('orders')" id="tab-orders" class="shrink-0 px-4 py-2 text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Orders</button>
-                <button onclick="switchAdminTab('summary')" id="tab-summary" class="shrink-0 px-4 py-2 text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Summary</button>
+        <div class="p-3 md:p-4 fade-in pb-16">
+            <div class="flex items-center justify-between mb-5">
+                <div class="flex items-center gap-3">
+                    <button onclick="renderAdminDashboard(document.getElementById('app-container'))" class="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                        <i class="fas fa-arrow-left text-lg"></i>
+                    </button>
+                    <h2 class="text-xl md:text-2xl font-display font-bold text-gray-900 dark:text-gray-100">Managing: ${config.name}</h2>
+                </div>
             </div>
+            <div class="bg-white dark:bg-[#111] p-4 md:p-5 rounded-2xl shadow-sm border border-gray-400 dark:border-gray-800 mb-6">
+                <!-- TABS -->
+                <div class="flex overflow-x-auto border-b border-gray-400 dark:border-gray-800 mb-4 text-sm font-semibold">
+                    <button onclick="switchAdminTab('info')" id="tab-info" class="shrink-0 px-4 py-2 text-gray-900 dark:text-white border-b-2 border-gray-900 dark:border-white transition-colors">Info & Settings</button>
+                    <button onclick="switchAdminTab('products')" id="tab-products" class="shrink-0 px-4 py-2 text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Products</button>
+                    <button onclick="switchAdminTab('orders')" id="tab-orders" class="shrink-0 px-4 py-2 text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Orders</button>
+                    <button onclick="switchAdminTab('summary')" id="tab-summary" class="shrink-0 px-4 py-2 text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Summary</button>
+                </div>
 
             <!-- SETTINGS TAB -->
             <div id="panel-info" class="space-y-4">
@@ -769,6 +776,7 @@ async function manageStore(storeId, initialTab = 'info') {
             <div id="panel-summary" class="hidden">
                 ${renderAdminSummary(orders, products)}
             </div>
+        </div>
         </div>
     `;
 
@@ -929,9 +937,9 @@ function renderOrderList(orders, storeId) {
                     <p class="font-bold text-blue-600">$${o.total.toFixed(2)}</p>
                 </div>
             </div>
-            <div class="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                ${o.items.map(i => `${i.qty}x ${i.name}`).join(', ')}
-            </div>
+            <ul class="text-xs text-gray-600 dark:text-gray-400 mb-2 list-disc pl-4 space-y-1">
+                ${o.items.map(i => `<li>${i.qty}x ${i.name}</li>`).join('')}
+            </ul>
             <div class="flex items-center gap-3 mt-3">
                 <label class="text-xs font-bold flex items-center gap-1 cursor-pointer">
                     <input type="radio" name="status_${o.orderId}" value="Not Collected" ${o.status !== 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${o.orderId}', 'Not Collected')">
@@ -989,22 +997,22 @@ function renderAdminSummary(orders, products) {
     const breakdownHtml = `
         <table class="w-full text-left border-collapse">
             <thead>
-                <tr class="border-b border-gray-300">
-                    <th class="p-3 text-xs uppercase text-gray-700 font-bold">Item</th>
-                    <th class="p-3 text-xs uppercase text-gray-700 font-bold text-right">Price</th>
-                    <th class="p-3 text-xs uppercase text-gray-700 font-bold text-right">Sold</th>
-                    <th class="p-3 text-xs uppercase text-gray-700 font-bold text-right">Revenue</th>
+                <tr class="border-b border-gray-300 dark:border-gray-700">
+                    <th class="p-3 text-xs uppercase text-gray-700 dark:text-gray-300 font-bold">Item</th>
+                    <th class="p-3 text-xs uppercase text-gray-700 dark:text-gray-300 font-bold text-right">Price</th>
+                    <th class="p-3 text-xs uppercase text-gray-700 dark:text-gray-300 font-bold text-right">Sold</th>
+                    <th class="p-3 text-xs uppercase text-gray-700 dark:text-gray-300 font-bold text-right">Revenue</th>
                 </tr>
             </thead>
             <tbody>
                 ${Object.keys(itemStats).map(name => {
                     const price = (itemStats[name].revenue / itemStats[name].qty).toFixed(2);
                     return `
-                    <tr class="border-b border-gray-200 last:border-0 hover:bg-gray-50">
-                        <td class="p-3 text-sm font-semibold text-gray-900">${name}</td>
-                        <td class="p-3 text-sm text-gray-700 text-right">$${price}</td>
-                        <td class="p-3 text-sm font-bold text-gray-900 text-right">${itemStats[name].qty}</td>
-                        <td class="p-3 text-sm font-bold text-green-700 text-right">$${itemStats[name].revenue.toFixed(2)}</td>
+                    <tr class="border-b border-gray-200 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <td class="p-3 text-sm font-semibold text-gray-900 dark:text-gray-100">${name}</td>
+                        <td class="p-3 text-sm text-gray-700 dark:text-gray-400 text-right">$${price}</td>
+                        <td class="p-3 text-sm font-bold text-gray-900 dark:text-gray-100 text-right">${itemStats[name].qty}</td>
+                        <td class="p-3 text-sm font-bold text-green-700 dark:text-green-400 text-right">$${itemStats[name].revenue.toFixed(2)}</td>
                     </tr>
                     `
                 }).join('')}
@@ -1129,16 +1137,17 @@ function adminEditOrderModal(eventId, orderId) {
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Customer Type</label>
-                    <select id="edit-custType" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
-                        <option value="">None</option>
+                    <select id="edit-custType" onchange="handleAdminEditCustType()" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
+                        <option value="">Select...</option>
+                        <option value="Volunteer" ${order.custType === 'Volunteer' ? 'selected' : ''}>Volunteer</option>
                         <option value="Friend of Volunteer" ${order.custType === 'Friend of Volunteer' ? 'selected' : ''}>Friend of Volunteer</option>
-                        <option value="Current Volunteer" ${order.custType === 'Current Volunteer' ? 'selected' : ''}>Current Volunteer</option>
-                        <option value="Ex Volunteer" ${order.custType === 'Ex Volunteer' ? 'selected' : ''}>Ex Volunteer</option>
+                        <option value="Caregiver" ${order.custType === 'Caregiver' ? 'selected' : ''}>Caregiver</option>
+                        <option value="Public" ${order.custType === 'Public' ? 'selected' : ''}>Public</option>
                     </select>
                 </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Relation Name (if applicable)</label>
-                    <input type="text" id="edit-relation" value="${order.custRelationName}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
+                <div id="edit-relationContainer" class="${(order.custType === 'Friend of Volunteer' || order.custType === 'Caregiver') ? '' : 'hidden'}">
+                    <label id="edit-relationLabel" class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">${order.custType === 'Caregiver' ? "Trainee's Name" : "Volunteer's Name"}</label>
+                    <input type="text" id="edit-relation" value="${order.custRelationName || ''}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
                 </div>
                 
                 <div class="mt-4">
@@ -1157,6 +1166,22 @@ function adminEditOrderModal(eventId, orderId) {
     `;
     document.body.appendChild(div);
 }
+
+window.handleAdminEditCustType = function() {
+    const val = document.getElementById('edit-custType').value;
+    const container = document.getElementById('edit-relationContainer');
+    const label = document.getElementById('edit-relationLabel');
+    if (val === 'Friend of Volunteer') {
+        container.classList.remove('hidden');
+        label.innerText = "Volunteer's Name";
+    } else if (val === 'Caregiver') {
+        container.classList.remove('hidden');
+        label.innerText = "Trainee's Name";
+    } else {
+        container.classList.add('hidden');
+        document.getElementById('edit-relation').value = '';
+    }
+};
 
 async function submitAdminEditOrder(eventId, orderId) {
     const customer = document.getElementById('edit-customer').value;
