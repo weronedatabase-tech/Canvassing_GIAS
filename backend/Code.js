@@ -43,6 +43,9 @@ function doPost(e) {
       case 'ADMIN_UPDATE_ORDER': 
         data = updateOrderStatus(req.eventId, req.orderId, req.status); 
         break;
+      case 'ADMIN_UPDATE_ORDER_PAYMENT':
+        data = updateOrderPaymentStatus(req.eventId, req.orderId, req.isConfirmed);
+        break;
       case 'ADMIN_EDIT_ORDER': 
         data = editOrder(req.eventId, req.orderId, req.updatedData); 
         break;
@@ -125,6 +128,26 @@ function saveStoreConfig(payload) {
     payload.bannerImageId = file.getId();
     delete payload.imageBase64;
     delete payload.mimeType;
+  }
+  
+  if (payload.summaryFileBase64) {
+    const folder = DriveApp.getFolderById(payload.id);
+    const ext = payload.summaryFileMimeType === 'application/pdf' ? 'pdf' : (payload.summaryFileMimeType === 'image/png' ? 'png' : 'jpg');
+    const blob = Utilities.newBlob(Utilities.base64Decode(payload.summaryFileBase64.split(',')[1]), payload.summaryFileMimeType, `Summary_${Date.now()}.${ext}`);
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    payload.summaryFileId = file.getId();
+    payload.summaryFileType = payload.summaryFileMimeType.startsWith('image/') ? 'image' : 'pdf';
+    payload.summaryFileName = payload.summaryFileName || `Summary File`;
+    delete payload.summaryFileBase64;
+    delete payload.summaryFileMimeType;
+  }
+  
+  if (payload.removeSummaryFile) {
+    payload.summaryFileId = null;
+    payload.summaryFileType = null;
+    payload.summaryFileName = null;
+    delete payload.removeSummaryFile;
   }
   
   if (idx > -1) {
@@ -449,7 +472,7 @@ function getOrders(eventId) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return []; 
   
-  const lastCol = Math.max(sheet.getLastColumn(), 13); 
+  const lastCol = Math.max(sheet.getLastColumn(), 14); 
   const range = sheet.getRange(2, 1, lastRow - 1, lastCol);
   const data = range.getValues();
   
@@ -461,6 +484,7 @@ function getOrders(eventId) {
          orderId: id, date: row[1], customer: row[6], contact: row[7],
          email: row[8], imageUrl: row[9], status: row[10] || "Pending",
          custType: row[11] || "", custRelationName: row[12] || "",
+         paymentConfirmed: row[13] === true || String(row[13]).toLowerCase() === 'true',
          items: [], total: 0
        };
     }
@@ -636,4 +660,25 @@ function resendOrderEmail(eventId, orderId) {
   
   const emailStatus = _sendOrderEmail(email, orderId, customerName, items, totalAmount, store, false);
   return { emailStatus: emailStatus };
+}
+
+function updateOrderPaymentStatus(eventId, orderId, isConfirmed) {
+  const sheetId = getSheetIdForEvent(eventId);
+  const ss = SpreadsheetApp.openById(sheetId);
+  const sheet = ss.getSheets()[0];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error("No orders found.");
+  
+  const range = sheet.getRange(2, 1, lastRow - 1, 1);
+  const ids = range.getValues().flat();
+  
+  let found = false;
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i]).trim() === String(orderId).trim()) {
+      sheet.getRange(i + 2, 14).setValue(isConfirmed);
+      found = true;
+    }
+  }
+  if (!found) throw new Error("Order ID not found.");
+  return { success: true };
 }

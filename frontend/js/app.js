@@ -193,13 +193,13 @@ async function renderLanding(container) {
         <div class="grid gap-4">`;
         
     if (openStores.length === 0) {
-        html += `<p class="text-gray-700 font-medium">No active fundraisers at the moment.</p>`;
+        html += `<p class="text-gray-700 dark:text-gray-300 font-medium">No active fundraisers at the moment.</p>`;
     } else {
         html += openStores.map(s => `
             <div onclick="Router.navigate('store_info', {id: '${s.id}'})" class="bg-white dark:bg-[#111] p-4 rounded-xl shadow-sm border border-gray-400 dark:border-gray-800 cursor-pointer hover:shadow-md transition-all active:scale-95 group">
                 ${s.bannerImageId ? `<img src="https://lh3.googleusercontent.com/d/${s.bannerImageId}" class="w-full h-36 object-cover rounded-lg mb-3 group-hover:opacity-95 transition-opacity">` : ''}
                 <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 transition-colors">${s.name}</h3>
-                <p class="text-sm font-semibold text-gray-700 mt-1"><i class="far fa-calendar-alt mr-1"></i> Closes: ${s.closingDate || 'No date set'}</p>
+                <p class="text-sm font-semibold text-gray-700 dark:text-gray-400 mt-1"><i class="far fa-calendar-alt mr-1"></i> Closes: ${s.closingDate || 'No date set'}</p>
             </div>
         `).join('');
     }
@@ -251,6 +251,13 @@ async function renderStoreShop(container, storeId) {
     container.innerHTML = `
         <div class="p-4 fade-in pb-24">
             <h2 class="text-xl font-bold flex items-center gap-2 mb-4"><i class="fas fa-store"></i> ${store.name} Items</h2>
+            
+            ${store.summaryFileId ? (
+                store.summaryFileType === 'image' 
+                ? `<img src="https://lh3.googleusercontent.com/d/${store.summaryFileId}" class="w-full rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 mb-6 object-contain max-h-[60vh]">`
+                : `<a href="https://drive.google.com/file/d/${store.summaryFileId}/view" target="_blank" class="block w-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 py-3 px-4 rounded-xl font-bold mb-6 text-center border border-blue-200 dark:border-blue-800 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-file-pdf mr-2"></i> View ${store.summaryFileName || 'Products Summary'}</a>`
+            ) : ''}
+            
             <div class="grid grid-cols-1 gap-4" id="productList">
                 ${State.products.length === 0 ? '<p>No items.</p>' : State.products.map(p => {
                     const inCart = State.cart.find(c => c.id === p.id);
@@ -268,7 +275,7 @@ async function renderStoreShop(container, storeId) {
                         <div class="flex-1 min-w-0 flex flex-col justify-between">
                             <div>
                                 <h3 class="font-bold text-lg leading-tight dark:text-white break-words">${p.name}</h3>
-                                <p class="text-xs text-gray-700 line-clamp-2 mt-1 break-words">${p.description || ''}</p>
+                                <p class="text-xs text-gray-700 dark:text-gray-400 line-clamp-2 mt-1 break-words">${p.description || ''}</p>
                             </div>
                             <div class="flex justify-between items-end mt-2">
                                 <span class="font-bold text-blue-600 dark:text-blue-400 text-lg">$${p.price.toFixed(2)}</span>
@@ -442,13 +449,13 @@ async function renderCheckout(container) {
                 
                 <div class="bg-white dark:bg-gray-800 p-4 rounded shadow border border-gray-400 dark:border-gray-700">
                     <h3 class="font-bold mb-3 border-b pb-2 dark:border-gray-700">1. Your Details</h3>
-                    <div><label class="block text-xs font-bold text-gray-700 uppercase">Full Name</label><input type="text" id="custName" required class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
+                    <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Full Name</label><input type="text" id="custName" required class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
                     <div class="grid grid-cols-2 gap-3 mt-3">
-                        <div><label class="block text-xs font-bold text-gray-700 uppercase">WhatsApp No.</label><input type="tel" id="custPhone" oninput="updateQrRef(this.value, '${rand}')" required pattern="^[89][0-9]{7}$" placeholder="8 digits" class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
-                        <div><label class="block text-xs font-bold text-gray-700 uppercase">Email</label><input type="email" id="custEmail" required class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
+                        <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">WhatsApp No.</label><input type="tel" id="custPhone" oninput="updateQrRef(this.value, '${rand}')" required pattern="^[89][0-9]{7}$" placeholder="8 digits" class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
+                        <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Email</label><input type="email" id="custEmail" required class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
                     </div>
                     <div class="mt-3">
-                        <label class="block text-xs font-bold text-gray-700 uppercase">I AM A...</label>
+                        <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">I AM A...</label>
                         <select id="custType" required onchange="handleCustTypeChange()" class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600">
                             <option value="">Select...</option>
                             <option value="Volunteer">Volunteer</option>
@@ -458,7 +465,7 @@ async function renderCheckout(container) {
                         </select>
                     </div>
                     <div id="custRelationContainer" class="hidden mt-3">
-                        <label id="custRelationLabel" class="block text-xs font-bold text-gray-700 uppercase">Name</label>
+                        <label id="custRelationLabel" class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Name</label>
                         <input type="text" id="custRelationName" class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600">
                     </div>
                 </div>
@@ -477,7 +484,7 @@ async function renderCheckout(container) {
                     </div>
                     
                     <div class="mt-4">
-                        <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Upload Successful Payment Screenshot</label>
+                        <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">Upload Successful Payment Screenshot</label>
                         <input type="file" id="paymentProof" accept="image/*" required class="w-full text-sm">
                     </div>
                 </div>
@@ -740,7 +747,8 @@ async function createNewStorePrompt() {
 }
 
 async function toggleStoreStatus(storeId, isOpen) {
-    await apiCall('ADMIN_SAVE_STORE', { payload: { id: storeId, isOpen } });
+    State.masterConfig = await apiCall('ADMIN_SAVE_STORE', { payload: { id: storeId, isOpen } });
+    saveState();
     renderAdminDashboard(document.getElementById('app-container'), true);
 }
 
@@ -754,7 +762,7 @@ function renderAdminProductsList(products, storeId) {
             ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-12 h-12 object-cover rounded-lg">` : ''}
             <div class="flex-1 min-w-0">
                 <p class="font-bold text-sm text-gray-900 dark:text-gray-100 break-words">${p.name}</p>
-                ${p.description ? `<p class="text-xs text-gray-700 line-clamp-1 mt-0.5 break-words">${p.description}</p>` : ''}
+                ${p.description ? `<p class="text-xs text-gray-700 dark:text-gray-400 line-clamp-1 mt-0.5 break-words">${p.description}</p>` : ''}
                 <p class="text-xs font-semibold text-gray-600 dark:text-gray-400 mt-0.5">$${p.price.toFixed(2)}</p>
             </div>
             <button onclick="adminDeleteProduct('${storeId}', '${p.id}')" class="text-gray-400 hover:text-red-500 transition-colors p-2 ml-1"><i class="fas fa-trash"></i></button>
@@ -788,7 +796,7 @@ async function manageStore(storeId, initialTab = 'info') {
             </div>
             <div class="bg-white dark:bg-[#111] p-4 md:p-5 rounded-2xl shadow-sm border border-gray-400 dark:border-gray-800 mb-6">
                 <!-- TABS -->
-                <div class="flex overflow-x-auto border-b border-gray-400 dark:border-gray-800 mb-4 text-sm font-semibold">
+                <div class="flex overflow-x-auto border-b border-gray-400 dark:border-gray-800 mb-4 text-sm font-semibold hide-scrollbar">
                     <button onclick="switchAdminTab('info')" id="tab-info" class="shrink-0 px-4 py-2 text-gray-900 dark:text-white border-b-2 border-gray-900 dark:border-white transition-colors">Info & Settings</button>
                     <button onclick="switchAdminTab('products')" id="tab-products" class="shrink-0 px-4 py-2 text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Products</button>
                     <button onclick="switchAdminTab('orders')" id="tab-orders" class="shrink-0 px-4 py-2 text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">Orders</button>
@@ -828,6 +836,20 @@ async function manageStore(storeId, initialTab = 'info') {
 
             <!-- PRODUCTS TAB -->
             <div id="panel-products" class="hidden">
+                <div class="bg-gray-50 dark:bg-[#1a1a1a] p-3 md:p-4 rounded-xl border border-gray-400 dark:border-gray-800 mb-4">
+                    <h4 class="font-bold text-sm mb-3">Products' Summary List Image / File</h4>
+                    ${config.summaryFileId ? `
+                        <div class="mb-3 p-2 bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 flex justify-between items-center">
+                            <span class="text-xs text-green-600 dark:text-green-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Current: ${config.summaryFileName || 'File uploaded'}</span>
+                            <button onclick="adminRemoveSummaryFile('${storeId}')" class="text-red-500 hover:text-red-700 text-xs font-bold"><i class="fas fa-trash"></i> Remove</button>
+                        </div>
+                    ` : ''}
+                    <div class="mb-3 relative">
+                        <label id="summaryFileLabel" for="summaryFile" class="block w-full text-center p-2 border border-dashed border-gray-400 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Choose Products' Summary List Image / File</label>
+                        <input type="file" id="summaryFile" accept="image/*,application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('summaryFileLabel').textContent = this.files[0] ? this.files[0].name : 'Choose Products\' Summary List Image / File'">
+                    </div>
+                    <button onclick="adminUploadSummaryFile('${storeId}')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold text-sm transition-transform active:scale-95 hover:bg-blue-700">Upload File</button>
+                </div>
                 <div class="bg-gray-50 dark:bg-[#1a1a1a] p-3 md:p-4 rounded-xl border border-gray-400 dark:border-gray-800 mb-4">
                     <h4 class="font-bold text-sm mb-3">Add Product</h4>
                     <div class="grid grid-cols-2 gap-2 mb-2">
@@ -989,8 +1011,44 @@ async function saveStoreSettings(id) {
         payload.mimeType = mimeType;
     }
     
-    await apiCall('ADMIN_SAVE_STORE', { payload });
+    State.masterConfig = await apiCall('ADMIN_SAVE_STORE', { payload });
+    saveState();
     renderAdminDashboard(document.getElementById('app-container'), true);
+}
+
+async function adminUploadSummaryFile(eventId) {
+    const fileInput = document.getElementById('summaryFile');
+    if (!fileInput.files || fileInput.files.length === 0) {
+        customAlert('Please select a file first.');
+        return;
+    }
+    const file = fileInput.files[0];
+    const isPdf = file.type === 'application/pdf';
+    let summaryFileBase64 = null;
+    let summaryFileMimeType = file.type;
+    
+    if (isPdf) {
+        summaryFileBase64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.readAsDataURL(file);
+        });
+    } else {
+        summaryFileBase64 = await compressImage(file, 800);
+        summaryFileMimeType = 'image/jpeg';
+    }
+    
+    State.masterConfig = await apiCall('ADMIN_SAVE_STORE', { payload: { id: eventId, summaryFileBase64, summaryFileMimeType, summaryFileName: file.name } });
+    saveState();
+    manageStore(eventId, 'products');
+}
+
+async function adminRemoveSummaryFile(eventId) {
+    if(await customConfirm("Remove summary file?")) {
+        State.masterConfig = await apiCall('ADMIN_SAVE_STORE', { payload: { id: eventId, removeSummaryFile: true } });
+        saveState();
+        manageStore(eventId, 'products');
+    }
 }
 
 async function adminAddProduct(eventId) {
@@ -1021,27 +1079,31 @@ async function adminDeleteProduct(eventId, productId) {
 
 
 function renderOrderList(orders, storeId) {
-    if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700">No orders.</p>';
+    if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700 dark:text-gray-400">No orders.</p>';
     return orders.map(o => `
         <div class="border p-3 rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-900 order-card" data-id="${o.orderId}" data-search="${o.customer.toLowerCase()} ${o.contact} ${o.orderId.toLowerCase()}" data-status="${o.status || 'Not Collected'}">
-            <div class="flex justify-between items-start mb-2">
-                <div>
-                    <p class="font-bold text-sm">${o.customer}</p>
-                    <p class="text-xs text-gray-700">${o.orderId}</p>
-                    ${o.custType ? `<p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1 font-bold">${o.custType} ${o.custRelationName ? `(${o.custRelationName})` : ''}</p>` : ''}
-                    <div class="flex gap-2 mt-2">
-                        <a href="https://wa.me/65${o.contact.replace(/\D/g, '')}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white text-[10px] sm:text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"><i class="fab fa-whatsapp text-sm"></i> Msg / Call Customer</a>
-                        <button onclick="navigator.clipboard.writeText('${o.contact}'); customAlert('Phone number copied!');" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-[10px] sm:text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"><i class="fas fa-copy"></i> Copy Customer Phone No</button>
+            <div class="flex justify-between items-start mb-2 gap-2">
+                <div class="flex-1 min-w-0">
+                    <p class="font-bold text-sm text-gray-900 dark:text-gray-100 truncate">${o.customer}</p>
+                    <p class="text-xs text-gray-700 dark:text-gray-400 truncate">${o.orderId}</p>
+                    ${o.custType ? `<p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1 font-bold truncate">${o.custType} ${o.custRelationName ? `(${o.custRelationName})` : ''}</p>` : ''}
+                    <div class="flex gap-2 mt-2 flex-wrap">
+                        <a href="https://wa.me/65${o.contact.replace(/\D/g, '')}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white text-[10px] sm:text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm whitespace-nowrap"><i class="fab fa-whatsapp text-sm"></i> Msg / Call</a>
+                        <button onclick="navigator.clipboard.writeText('${o.contact}'); customAlert('Phone number copied!');" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-[10px] sm:text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm whitespace-nowrap"><i class="fas fa-copy"></i> Copy Phone</button>
                     </div>
                 </div>
-                <div class="text-right">
+                <div class="text-right shrink-0">
                     <p class="font-bold text-blue-600">$${o.total.toFixed(2)}</p>
+                    <label class="flex items-center justify-end gap-1 mt-1 cursor-pointer">
+                        <input type="checkbox" class="rounded border-gray-400" ${o.paymentConfirmed ? 'checked' : ''} onchange="updateOrdPaymentStatus('${storeId}', '${o.orderId}', this.checked)">
+                        <span class="text-[10px] sm:text-xs font-semibold text-gray-600 dark:text-gray-400">Payment Confirmed</span>
+                    </label>
                 </div>
             </div>
             <ul class="text-xs text-gray-600 dark:text-gray-400 mb-2 list-disc pl-4 space-y-1">
                 ${o.items.map(i => `<li>${i.qty}x ${i.name}</li>`).join('')}
             </ul>
-            <div class="flex items-center gap-3 mt-3">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3">
                 <label class="text-xs font-bold flex items-center gap-1 cursor-pointer">
                     <input type="radio" name="status_${o.orderId}" value="Not Collected" ${o.status !== 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${o.orderId}', 'Not Collected')">
                     <span class="text-red-500">Not Collected</span>
@@ -1075,7 +1137,7 @@ function filterAdminOrders() {
 }
 
 function renderAdminSummary(orders, products) {
-    if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700">No orders yet.</p>';
+    if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700 dark:text-gray-400">No orders yet.</p>';
     
     let totalRevenue = 0;
     const itemStats = {};
@@ -1145,6 +1207,12 @@ function renderAdminSummary(orders, products) {
     `;
 }
 
+async function updateOrdPaymentStatus(eventId, orderId, isConfirmed) {
+    await apiCall('ADMIN_UPDATE_ORDER_PAYMENT', { eventId, orderId, isConfirmed }, true);
+    const idx = State.ordersCache.findIndex(o => o.orderId === orderId);
+    if(idx > -1) State.ordersCache[idx].paymentConfirmed = isConfirmed;
+}
+
 async function updateOrdStatus(eventId, orderId, status) {
     await apiCall('ADMIN_UPDATE_ORDER', { eventId, orderId, status }, true);
     const idx = State.ordersCache.findIndex(o => o.orderId === orderId);
@@ -1168,7 +1236,7 @@ async function adminDeleteOrder(eventId, orderId) {
     if (card) {
         card.remove();
         if (State.ordersCache.length === 0) {
-            document.getElementById('ordersList').innerHTML = '<p class="text-sm text-gray-700">No orders.</p>';
+            document.getElementById('ordersList').innerHTML = '<p class="text-sm text-gray-700 dark:text-gray-400">No orders.</p>';
         }
     } else {
         document.getElementById('ordersList').innerHTML = renderOrderList(State.ordersCache, eventId);
