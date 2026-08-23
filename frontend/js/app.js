@@ -1081,29 +1081,29 @@ async function adminDeleteProduct(eventId, productId) {
 function renderOrderList(orders, storeId) {
     if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700 dark:text-gray-400">No orders.</p>';
     return orders.map(o => `
-        <div class="border p-3 rounded dark:border-gray-700 bg-gray-50 dark:bg-gray-900 order-card" data-id="${o.orderId}" data-search="${o.customer.toLowerCase()} ${o.contact} ${o.orderId.toLowerCase()}" data-status="${o.status || 'Not Collected'}">
-            <div class="flex justify-between items-start mb-2 gap-2">
+        <div class="border p-3.5 sm:p-4 rounded-xl dark:border-gray-700 bg-gray-50 dark:bg-gray-900 order-card mb-3" data-id="${o.orderId}" data-search="${o.customer.toLowerCase()} ${o.contact} ${o.orderId.toLowerCase()}" data-status="${o.status || 'Not Collected'}">
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2.5 gap-2">
                 <div class="flex-1 min-w-0">
-                    <p class="font-bold text-sm text-gray-900 dark:text-gray-100 truncate">${o.customer}</p>
-                    <p class="text-xs text-gray-700 dark:text-gray-400 truncate">${o.orderId}</p>
-                    ${o.custType ? `<p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1 font-bold truncate">${o.custType} ${o.custRelationName ? `(${o.custRelationName})` : ''}</p>` : ''}
-                    <div class="flex gap-2 mt-2 flex-wrap">
-                        <a href="https://wa.me/65${o.contact.replace(/\D/g, '')}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white text-[10px] sm:text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm whitespace-nowrap"><i class="fab fa-whatsapp text-sm"></i> Msg / Call</a>
-                        <button onclick="navigator.clipboard.writeText('${o.contact}'); customAlert('Phone number copied!');" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-[10px] sm:text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm whitespace-nowrap"><i class="fas fa-copy"></i> Copy Phone</button>
+                    <p class="font-bold text-base text-gray-900 dark:text-gray-100 break-words">${o.customer}</p>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 break-all font-mono">${o.orderId}</p>
+                    ${o.custType ? `<p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1 font-bold break-words">${o.custType} ${o.custRelationName ? `(${o.custRelationName})` : ''}</p>` : ''}
+                    <div class="flex gap-2 mt-2.5 flex-wrap">
+                        <a href="https://wa.me/65${o.contact.replace(/\D/g, '')}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"><i class="fab fa-whatsapp text-sm"></i> Msg / Call</a>
+                        <button onclick="navigator.clipboard.writeText('${o.contact}'); customAlert('Phone number copied!');" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"><i class="fas fa-copy"></i> Copy Phone</button>
                     </div>
                 </div>
-                <div class="text-right shrink-0">
-                    <p class="font-bold text-blue-600">$${o.total.toFixed(2)}</p>
-                    <label class="flex items-center justify-end gap-1 mt-1 cursor-pointer">
-                        <input type="checkbox" class="rounded border-gray-400" ${o.paymentConfirmed ? 'checked' : ''} onchange="updateOrdPaymentStatus('${storeId}', '${o.orderId}', this.checked)">
-                        <span class="text-[10px] sm:text-xs font-semibold text-gray-600 dark:text-gray-400">Payment Confirmed</span>
+                <div class="flex sm:flex-col justify-between sm:justify-start items-center sm:items-end gap-2 pt-1 sm:pt-0 border-t sm:border-t-0 border-gray-200 dark:border-gray-800 sm:shrink-0">
+                    <p class="font-bold text-blue-600 text-lg sm:text-xl">$${o.total.toFixed(2)}</p>
+                    <label id="payment-badge-${o.orderId}" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm ${o.paymentConfirmed ? 'bg-emerald-100 text-emerald-900 border-emerald-400 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-600 ring-1 ring-emerald-400/30' : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60 dark:hover:bg-amber-950/60'}">
+                        <input type="checkbox" class="w-4 h-4 rounded text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer" ${o.paymentConfirmed ? 'checked' : ''} onchange="updateOrdPaymentStatus('${storeId}', '${o.orderId}', this.checked)">
+                        <span class="select-none font-bold">${o.paymentConfirmed ? '✓ Payment Confirmed' : 'Payment Confirmed'}</span>
                     </label>
                 </div>
             </div>
-            <ul class="text-xs text-gray-600 dark:text-gray-400 mb-2 list-disc pl-4 space-y-1">
-                ${o.items.map(i => `<li>${i.qty}x ${i.name}</li>`).join('')}
+            <ul class="text-xs text-gray-700 dark:text-gray-300 my-2.5 list-disc pl-4 space-y-1 bg-white/60 dark:bg-black/20 p-2 rounded-lg border border-gray-200 dark:border-gray-800 break-words">
+                ${o.items.map(i => `<li class="break-words">${i.qty}x ${i.name}</li>`).join('')}
             </ul>
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3 pt-2 border-t border-gray-200 dark:border-gray-800">
                 <label class="text-xs font-bold flex items-center gap-1 cursor-pointer">
                     <input type="radio" name="status_${o.orderId}" value="Not Collected" ${o.status !== 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${o.orderId}', 'Not Collected')">
                     <span class="text-red-500">Not Collected</span>
@@ -1208,6 +1208,17 @@ function renderAdminSummary(orders, products) {
 }
 
 async function updateOrdPaymentStatus(eventId, orderId, isConfirmed) {
+    const badge = document.getElementById(`payment-badge-${orderId}`);
+    if (badge) {
+        const textSpan = badge.querySelector('span');
+        if (isConfirmed) {
+            badge.className = "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm bg-emerald-100 text-emerald-900 border-emerald-400 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-600 ring-1 ring-emerald-400/30";
+            if (textSpan) textSpan.textContent = "✓ Payment Confirmed";
+        } else {
+            badge.className = "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60 dark:hover:bg-amber-950/60";
+            if (textSpan) textSpan.textContent = "Payment Confirmed";
+        }
+    }
     await apiCall('ADMIN_UPDATE_ORDER_PAYMENT', { eventId, orderId, isConfirmed }, true);
     const idx = State.ordersCache.findIndex(o => o.orderId === orderId);
     if(idx > -1) State.ordersCache[idx].paymentConfirmed = isConfirmed;
