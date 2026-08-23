@@ -26,6 +26,20 @@ function initTheme() {
 }
 initTheme();
 
+function escapeHTML(str) {
+    if (typeof str !== 'string') return str;
+    return str.replace(/[&<>'"]/g, 
+        tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+        }[tag] || tag)
+    );
+}
+
+
 function customAlert(msg) {
     return new Promise(resolve => {
         const div = document.createElement('div');
@@ -198,7 +212,7 @@ async function renderLanding(container) {
         html += openStores.map(s => `
             <div onclick="Router.navigate('store_info', {id: '${s.id}'})" class="bg-white dark:bg-[#111] p-4 rounded-xl shadow-sm border border-gray-400 dark:border-gray-800 cursor-pointer hover:shadow-md transition-all active:scale-95 group">
                 ${s.bannerImageId ? `<img src="https://lh3.googleusercontent.com/d/${s.bannerImageId}" class="w-full h-36 object-cover rounded-lg mb-3 group-hover:opacity-95 transition-opacity">` : ''}
-                <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 transition-colors">${s.name}</h3>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 transition-colors">${escapeHTML(s.name)}</h3>
                 <p class="text-sm font-semibold text-gray-700 dark:text-gray-400 mt-1"><i class="far fa-calendar-alt mr-1"></i> Closes: ${s.closingDate || 'No date set'}</p>
             </div>
         `).join('');
@@ -274,8 +288,8 @@ async function renderStoreShop(container, storeId) {
                         ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-24 h-24 object-cover rounded-md">` : '<div class="w-24 h-24 bg-gray-200 rounded-md flex items-center justify-center text-gray-400">No Image</div>'}
                         <div class="flex-1 min-w-0 flex flex-col justify-between">
                             <div>
-                                <h3 class="font-bold text-lg leading-tight dark:text-white break-words">${p.name}</h3>
-                                <p class="text-xs text-gray-700 dark:text-gray-400 line-clamp-2 mt-1 break-words">${p.description || ''}</p>
+                                <h3 class="font-bold text-lg leading-tight dark:text-white break-words">${escapeHTML(p.name)}</h3>
+                                <p class="text-xs text-gray-700 dark:text-gray-400 line-clamp-2 mt-1 break-words">${escapeHTML(p.description || '')}</p>
                             </div>
                             <div class="flex justify-between items-end mt-2">
                                 <span class="font-bold text-blue-600 dark:text-blue-400 text-lg">$${p.price.toFixed(2)}</span>
@@ -364,7 +378,7 @@ async function renderCartPage(container) {
                 ${State.cart.map(c => `
                     <div class="flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded shadow">
                         <div>
-                            <p class="font-bold">${c.name}</p>
+                            <p class="font-bold">${escapeHTML(c.name)}</p>
                             <p class="text-sm text-gray-700">$${c.price.toFixed(2)} x ${c.qty} = <span class="font-bold text-gray-900 dark:text-white">$${(c.price * c.qty).toFixed(2)}</span></p>
                         </div>
                         <div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded border border-blue-100 dark:border-gray-600">
@@ -602,8 +616,8 @@ async function renderSuccess(container, params) {
         <div class="p-6 fade-in flex flex-col items-center justify-center min-h-[60vh] text-center">
             <div class="bg-green-100 dark:bg-green-900 p-4 rounded-full mb-4"><i class="fas fa-check text-4xl text-green-600 dark:text-green-400"></i></div>
             <h2 class="text-2xl font-bold mb-2">Order Submitted!</h2>
-            <p class="mb-4">Order ID: <span class="font-mono font-bold">${params.orderId}</span></p>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">Confirmation sent to ${params.email}</p>
+            <p class="mb-4">Order ID: <span class="font-mono font-bold">${escapeHTML(params.orderId)}</span></p>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">Confirmation sent to ${escapeHTML(params.email)}</p>
             <button onclick="Router.navigate('landing')" class="text-blue-600 font-bold hover:underline">Back to Home</button>
         </div>
     `;
@@ -680,13 +694,13 @@ async function renderAdminDashboard(container, forceRefresh = false) {
                         return `
                         <div class="border border-gray-400 dark:border-gray-800 p-3.5 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition-all ${actuallyOpen ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-red-50/50 dark:bg-red-900/10'}">
                             <div class="w-full sm:w-auto flex-1 pr-2">
-                                <h4 class="font-semibold text-gray-900 dark:text-gray-100 leading-tight">${s.name}</h4>
+                                <h4 class="font-semibold text-gray-900 dark:text-gray-100 leading-tight">${escapeHTML(s.name)}</h4>
                                 <p class="text-xs mt-1 text-gray-700">Status: <span class="font-bold ${actuallyOpen ? 'text-green-600 dark:text-green-400' : 'text-red-500'}">${statusText}</span></p>
                             </div>
                             <div class="w-full sm:w-auto flex justify-end gap-2 text-sm shrink-0 items-center">
                                 <button onclick="toggleStoreStatus('${s.id}', ${!s.isOpen})" class="bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 px-3 py-1.5 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">${s.isOpen ? 'Set Closed' : 'Set Open'}</button>
                                 <button onclick="Router.navigate('admin_manage_store', {id: '${s.id}'})" class="bg-gray-900 text-white dark:bg-white dark:text-gray-900 px-4 py-1.5 rounded-lg font-semibold transition-transform active:scale-95">Manage</button>
-                                <button onclick="promptDeleteEvent('${s.id}', '${s.name.replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-red-500 transition-colors p-2 ml-1" title="Delete Event"><i class="fas fa-trash"></i></button>
+                                <button onclick="promptDeleteEvent('${s.id}', '${escapeHTML(s.name).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-red-500 transition-colors p-2 ml-1" title="Delete Event"><i class="fas fa-trash"></i></button>
                             </div>
                         </div>
                     `}).join('')}
@@ -761,11 +775,11 @@ function renderAdminProductsList(products, storeId) {
             </div>
             ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-12 h-12 object-cover rounded-lg">` : ''}
             <div class="flex-1 min-w-0">
-                <p class="font-bold text-sm text-gray-900 dark:text-gray-100 break-words">${p.name}</p>
-                ${p.description ? `<p class="text-xs text-gray-700 dark:text-gray-400 line-clamp-1 mt-0.5 break-words">${p.description}</p>` : ''}
+                <p class="font-bold text-sm text-gray-900 dark:text-gray-100 break-words">${escapeHTML(p.name)}</p>
+                ${p.description ? `<p class="text-xs text-gray-700 dark:text-gray-400 line-clamp-1 mt-0.5 break-words">${escapeHTML(p.description)}</p>` : ''}
                 <p class="text-xs font-semibold text-gray-600 dark:text-gray-400 mt-0.5">$${p.price.toFixed(2)}</p>
             </div>
-            <button onclick="adminDeleteProduct('${storeId}', '${p.id}')" class="text-gray-400 hover:text-red-500 transition-colors p-2 ml-1"><i class="fas fa-trash"></i></button>
+            <button onclick="adminDeleteProduct('${storeId}', '${escapeHTML(p.id).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-red-500 transition-colors p-2 ml-1"><i class="fas fa-trash"></i></button>
         </div>
     `).join('');
 }
@@ -1081,41 +1095,41 @@ async function adminDeleteProduct(eventId, productId) {
 function renderOrderList(orders, storeId) {
     if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700 dark:text-gray-400">No orders.</p>';
     return orders.map(o => `
-        <div class="border p-3.5 sm:p-4 rounded-xl dark:border-gray-700 bg-gray-50 dark:bg-gray-900 order-card mb-3" data-id="${o.orderId}" data-search="${o.customer.toLowerCase()} ${o.contact} ${o.orderId.toLowerCase()}" data-status="${o.status || 'Not Collected'}">
+        <div class="border p-3.5 sm:p-4 rounded-xl dark:border-gray-700 bg-gray-50 dark:bg-gray-900 order-card mb-3" data-id="${escapeHTML(o.orderId)}" data-search="${escapeHTML(o.customer).toLowerCase()} ${escapeHTML(o.contact)} ${escapeHTML(o.orderId).toLowerCase()}" data-status="${escapeHTML(o.status || 'Not Collected')}">
             <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2.5 gap-2">
                 <div class="flex-1 min-w-0">
-                    <p class="font-bold text-base text-gray-900 dark:text-gray-100 break-words">${o.customer}</p>
-                    <p class="text-xs text-gray-600 dark:text-gray-400 break-all font-mono">${o.orderId}</p>
-                    ${o.custType ? `<p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1 font-bold break-words">${o.custType} ${o.custRelationName ? `(${o.custRelationName})` : ''}</p>` : ''}
+                    <p class="font-bold text-base text-gray-900 dark:text-gray-100 break-words">${escapeHTML(o.customer)}</p>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 break-all font-mono">${escapeHTML(o.orderId)}</p>
+                    ${o.custType ? `<p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1 font-bold break-words">${escapeHTML(o.custType)} ${o.custRelationName ? `(${escapeHTML(o.custRelationName)})` : ''}</p>` : ''}
                     <div class="flex gap-2 mt-2.5 flex-wrap">
-                        <a href="https://wa.me/65${o.contact.replace(/\D/g, '')}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"><i class="fab fa-whatsapp text-sm"></i> Msg / Call</a>
-                        <button onclick="navigator.clipboard.writeText('${o.contact}'); customAlert('Phone number copied!');" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"><i class="fas fa-copy"></i> Copy Phone</button>
+                        <a href="https://wa.me/65${escapeHTML(o.contact).replace(/\D/g, '')}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"><i class="fab fa-whatsapp text-sm"></i> Msg / Call</a>
+                        <button onclick="navigator.clipboard.writeText('${escapeHTML(o.contact).replace(/'/g, "\\'")}'); customAlert('Phone number copied!');" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"><i class="fas fa-copy"></i> Copy Phone</button>
                     </div>
                 </div>
                 <div class="flex sm:flex-col justify-between sm:justify-start items-center sm:items-end gap-2 pt-1 sm:pt-0 border-t sm:border-t-0 border-gray-200 dark:border-gray-800 sm:shrink-0">
                     <p class="font-bold text-blue-600 text-lg sm:text-xl">$${o.total.toFixed(2)}</p>
-                    <label id="payment-badge-${o.orderId}" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm ${o.paymentConfirmed ? 'bg-emerald-100 text-emerald-900 border-emerald-400 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-600 ring-1 ring-emerald-400/30' : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60 dark:hover:bg-amber-950/60'}">
-                        <input type="checkbox" class="w-4 h-4 rounded text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer" ${o.paymentConfirmed ? 'checked' : ''} onchange="updateOrdPaymentStatus('${storeId}', '${o.orderId}', this.checked)">
+                    <label id="payment-badge-${escapeHTML(o.orderId)}" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm ${o.paymentConfirmed ? 'bg-emerald-100 text-emerald-900 border-emerald-400 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-600 ring-1 ring-emerald-400/30' : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60 dark:hover:bg-amber-950/60'}">
+                        <input type="checkbox" class="w-4 h-4 rounded text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer" ${o.paymentConfirmed ? 'checked' : ''} onchange="updateOrdPaymentStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', this.checked)">
                         <span class="select-none font-bold">${o.paymentConfirmed ? '✓ Payment Confirmed' : 'Payment Confirmed'}</span>
                     </label>
                 </div>
             </div>
             <ul class="text-xs text-gray-700 dark:text-gray-300 my-2.5 list-disc pl-4 space-y-1 bg-white/60 dark:bg-black/20 p-2 rounded-lg border border-gray-200 dark:border-gray-800 break-words">
-                ${o.items.map(i => `<li class="break-words">${i.qty}x ${i.name}</li>`).join('')}
+                ${o.items.map(i => `<li class="break-words">${i.qty}x ${escapeHTML(i.name)}</li>`).join('')}
             </ul>
             <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3 pt-2 border-t border-gray-200 dark:border-gray-800">
                 <label class="text-xs font-bold flex items-center gap-1 cursor-pointer">
-                    <input type="radio" name="status_${o.orderId}" value="Not Collected" ${o.status !== 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${o.orderId}', 'Not Collected')">
+                    <input type="radio" name="status_${escapeHTML(o.orderId)}" value="Not Collected" ${o.status !== 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', 'Not Collected')">
                     <span class="text-red-500">Not Collected</span>
                 </label>
                 <label class="text-xs font-bold flex items-center gap-1 cursor-pointer">
-                    <input type="radio" name="status_${o.orderId}" value="Collected" ${o.status === 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${o.orderId}', 'Collected')">
+                    <input type="radio" name="status_${escapeHTML(o.orderId)}" value="Collected" ${o.status === 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', 'Collected')">
                     <span class="text-green-500">Collected</span>
                 </label>
-                ${o.imageUrl && o.imageUrl !== 'No Image' ? `<a href="${o.imageUrl}" target="_blank" class="text-xs text-blue-500 hover:text-blue-600 font-bold ml-auto mr-3">View Receipt</a>` : '<span class="ml-auto"></span>'}
-                <button onclick="adminResendEmail('${storeId}', '${o.orderId}')" class="text-gray-400 hover:text-blue-500 transition-colors mr-3" title="Resend Email"><i class="fas fa-envelope text-sm"></i></button>
-                <button onclick="adminEditOrderModal('${storeId}', '${o.orderId}')" class="text-gray-400 hover:text-blue-500 transition-colors mr-3" title="Edit Order"><i class="fas fa-edit text-sm"></i></button>
-                <button onclick="adminDeleteOrder('${storeId}', '${o.orderId}')" class="text-gray-400 hover:text-red-500 transition-colors" title="Delete Order"><i class="fas fa-trash text-sm"></i></button>
+                ${o.imageUrl && o.imageUrl !== 'No Image' ? `<a href="${escapeHTML(o.imageUrl)}" target="_blank" class="text-xs text-blue-500 hover:text-blue-600 font-bold ml-auto mr-3">View Receipt</a>` : '<span class="ml-auto"></span>'}
+                <button onclick="adminResendEmail('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-blue-500 transition-colors mr-3" title="Resend Email"><i class="fas fa-envelope text-sm"></i></button>
+                <button onclick="adminEditOrderModal('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-blue-500 transition-colors mr-3" title="Edit Order"><i class="fas fa-edit text-sm"></i></button>
+                <button onclick="adminDeleteOrder('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-red-500 transition-colors" title="Delete Order"><i class="fas fa-trash text-sm"></i></button>
             </div>
         </div>
     `).join('');
@@ -1302,12 +1316,12 @@ function adminEditOrderModal(eventId, orderId) {
         return `
             <div class="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-800">
                 <div class="flex flex-col">
-                    <span class="text-sm font-bold">${p.name}</span>
+                    <span class="text-sm font-bold">${escapeHTML(p.name)}</span>
                     <span class="text-xs text-gray-500">$${p.price.toFixed(2)}</span>
                 </div>
                 <div class="flex items-center gap-2">
                     <button type="button" class="bg-gray-200 dark:bg-gray-800 rounded px-2 text-sm" onclick="this.nextElementSibling.value = Math.max(0, parseInt(this.nextElementSibling.value) - 1)">-</button>
-                    <input type="number" class="edit-qty-input w-12 text-center bg-gray-50 dark:bg-black border border-gray-300 dark:border-gray-700 rounded text-sm" data-name="${p.name}" data-price="${p.price}" value="${qty}" min="0">
+                    <input type="number" class="edit-qty-input w-12 text-center bg-gray-50 dark:bg-black border border-gray-300 dark:border-gray-700 rounded text-sm" data-name="${escapeHTML(p.name).replace(/"/g, '&quot;')}" data-price="${p.price}" value="${qty}" min="0">
                     <button type="button" class="bg-gray-200 dark:bg-gray-800 rounded px-2 text-sm" onclick="this.previousElementSibling.value = parseInt(this.previousElementSibling.value) + 1">+</button>
                 </div>
             </div>
@@ -1316,20 +1330,20 @@ function adminEditOrderModal(eventId, orderId) {
 
     div.innerHTML = `
         <div class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800 max-h-[90vh] overflow-y-auto relative">
-            <h3 class="text-lg font-bold mb-4">Edit Order: ${order.orderId}</h3>
+            <h3 class="text-lg font-bold mb-4">Edit Order: ${escapeHTML(order.orderId)}</h3>
             
             <div class="space-y-4">
                 <div>
                     <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Customer Name</label>
-                    <input type="text" id="edit-customer" value="${order.customer}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
+                    <input type="text" id="edit-customer" value="${escapeHTML(order.customer).replace(/"/g, '&quot;')}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Contact (Phone)</label>
-                    <input type="text" id="edit-contact" value="${order.contact}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
+                    <input type="text" id="edit-contact" value="${escapeHTML(order.contact).replace(/"/g, '&quot;')}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Email</label>
-                    <input type="email" id="edit-email" value="${order.email || ''}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
+                    <input type="email" id="edit-email" value="${escapeHTML(order.email || '').replace(/"/g, '&quot;')}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Customer Type</label>
@@ -1343,7 +1357,7 @@ function adminEditOrderModal(eventId, orderId) {
                 </div>
                 <div id="edit-relationContainer" class="${(order.custType === 'Friend of Volunteer' || order.custType === 'Caregiver') ? '' : 'hidden'}">
                     <label id="edit-relationLabel" class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">${order.custType === 'Caregiver' ? "Trainee's Name" : "Volunteer's Name"}</label>
-                    <input type="text" id="edit-relation" value="${order.custRelationName || ''}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
+                    <input type="text" id="edit-relation" value="${escapeHTML(order.custRelationName || '').replace(/"/g, '&quot;')}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
                 </div>
                 
                 <div class="mt-4">

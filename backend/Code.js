@@ -122,7 +122,7 @@ function saveStoreConfig(payload) {
   if (payload.imageBase64) {
     // Upload new banner
     const folder = DriveApp.getFolderById(payload.id);
-    const blob = Utilities.newBlob(Utilities.base64Decode(payload.imageBase64.split(',')[1]), payload.mimeType, `Banner_${Date.now()}`);
+    const blob = Utilities.newBlob(Utilities.base64Decode((payload.imageBase64.includes(',') ? payload.imageBase64.split(',')[1] : payload.imageBase64)), payload.mimeType, `Banner_${Date.now()}`);
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     payload.bannerImageId = file.getId();
@@ -133,7 +133,7 @@ function saveStoreConfig(payload) {
   if (payload.summaryFileBase64) {
     const folder = DriveApp.getFolderById(payload.id);
     const ext = payload.summaryFileMimeType === 'application/pdf' ? 'pdf' : (payload.summaryFileMimeType === 'image/png' ? 'png' : 'jpg');
-    const blob = Utilities.newBlob(Utilities.base64Decode(payload.summaryFileBase64.split(',')[1]), payload.summaryFileMimeType, `Summary_${Date.now()}.${ext}`);
+    const blob = Utilities.newBlob(Utilities.base64Decode((payload.summaryFileBase64.includes(',') ? payload.summaryFileBase64.split(',')[1] : payload.summaryFileBase64)), payload.summaryFileMimeType, `Summary_${Date.now()}.${ext}`);
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     payload.summaryFileId = file.getId();
@@ -272,7 +272,7 @@ function saveProduct(eventId, productData) {
   }
   
   if (productData.imageBase64) {
-    const blob = Utilities.newBlob(Utilities.base64Decode(productData.imageBase64.split(',')[1]), productData.mimeType, `Product_${Date.now()}`);
+    const blob = Utilities.newBlob(Utilities.base64Decode((productData.imageBase64.includes(',') ? productData.imageBase64.split(',')[1] : productData.imageBase64)), productData.mimeType, `Product_${Date.now()}`);
     const imgFile = pFolder.createFile(blob);
     imgFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     productData.imageId = imgFile.getId();
@@ -369,7 +369,7 @@ function submitOrder(eventId, data) {
   let imageUrl = "No Image";
   if (data.paymentProofBase64) {
     const folder = DriveApp.getFolderById(eventId);
-    const blob = Utilities.newBlob(Utilities.base64Decode(data.paymentProofBase64.split(',')[1]), data.mimeType, `Payment_${data.customerName}_${Date.now()}`);
+    const blob = Utilities.newBlob(Utilities.base64Decode((data.paymentProofBase64.includes(',') ? data.paymentProofBase64.split(',')[1] : data.paymentProofBase64)), data.mimeType, `Payment_${data.customerName}_${Date.now()}`);
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     imageUrl = file.getUrl();
