@@ -853,14 +853,14 @@ async function manageStore(storeId, initialTab = 'info') {
                 <div class="bg-gray-50 dark:bg-[#1a1a1a] p-3 md:p-4 rounded-xl border border-gray-400 dark:border-gray-800 mb-4">
                     <h4 class="font-bold text-sm mb-3">Products' Summary List Image / File</h4>
                     ${config.summaryFileId ? `
-                        <div class="mb-3 p-2 bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 flex justify-between items-center">
-                            <span class="text-xs text-green-600 dark:text-green-400 font-bold"><i class="fas fa-check-circle mr-1"></i> Current: ${config.summaryFileName || 'File uploaded'}</span>
-                            <button onclick="adminRemoveSummaryFile('${storeId}')" class="text-red-500 hover:text-red-700 text-xs font-bold"><i class="fas fa-trash"></i> Remove</button>
+                        <div class="mb-3 p-2 bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 flex justify-between items-center gap-2">
+                            <span class="text-xs text-green-600 dark:text-green-400 font-bold flex-1 min-w-0 break-all"><i class="fas fa-check-circle mr-1"></i> Current: ${escapeHTML(config.summaryFileName || 'File uploaded')}</span>
+                            <button onclick="adminRemoveSummaryFile('${storeId}')" class="text-red-500 hover:text-red-700 text-xs font-bold shrink-0"><i class="fas fa-trash"></i> Remove</button>
                         </div>
                     ` : ''}
                     <div class="mb-3 relative">
-                        <label id="summaryFileLabel" for="summaryFile" class="block w-full text-center p-2 border border-dashed border-gray-400 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Choose Products' Summary List Image / File</label>
-                        <input type="file" id="summaryFile" accept="image/*,application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('summaryFileLabel').textContent = this.files[0] ? this.files[0].name : 'Choose Products\' Summary List Image / File'">
+                        <label id="summaryFileLabel" for="summaryFile" class="block w-full text-center p-3 px-4 border border-dashed border-gray-400 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors break-all overflow-hidden">Choose Products Summary List Image / File</label>
+                        <input type="file" id="summaryFile" accept="image/*,application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('summaryFileLabel').textContent = this.files[0] ? this.files[0].name : 'Choose Products Summary List Image / File'">
                     </div>
                     <button onclick="adminUploadSummaryFile('${storeId}')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold text-sm transition-transform active:scale-95 hover:bg-blue-700">Upload File</button>
                 </div>
