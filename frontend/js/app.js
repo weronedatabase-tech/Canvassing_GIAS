@@ -903,7 +903,7 @@ async function manageStore(storeId, initialTab = 'info') {
 
             <!-- SUMMARY TAB -->
             <div id="panel-summary" class="hidden">
-                ${renderAdminSummary(orders, products)}
+                ${renderAdminSummary(orders, products, storeId)}
             </div>
         </div>
         </div>
@@ -1102,34 +1102,38 @@ function renderOrderList(orders, storeId) {
                     <p class="text-xs text-gray-600 dark:text-gray-400 break-all font-mono">${escapeHTML(o.orderId)}</p>
                     ${o.custType ? `<p class="text-xs text-indigo-600 dark:text-indigo-400 mt-1 font-bold break-words">${escapeHTML(o.custType)} ${o.custRelationName ? `(${escapeHTML(o.custRelationName)})` : ''}</p>` : ''}
                     <div class="flex gap-2 mt-2.5 flex-wrap">
-                        <a href="https://wa.me/65${escapeHTML(o.contact).replace(/\D/g, '')}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"><i class="fab fa-whatsapp text-sm"></i> Msg / Call</a>
-                        <button onclick="navigator.clipboard.writeText('${escapeHTML(o.contact).replace(/'/g, "\\'")}'); customAlert('Phone number copied!');" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"><i class="fas fa-copy"></i> Copy Phone</button>
+                        <a href="https://wa.me/65${escapeHTML(o.contact).replace(/\D/g, '')}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white w-9 h-9 rounded-lg flex items-center justify-center transition-colors shadow-sm" title="WhatsApp"><i class="fab fa-whatsapp text-base"></i></a>
+                        <a href="tel:+65${escapeHTML(o.contact).replace(/\D/g, '')}" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 w-9 h-9 rounded-lg flex items-center justify-center transition-colors shadow-sm" title="Call"><i class="fas fa-phone-alt text-base"></i></a>
                     </div>
                 </div>
                 <div class="flex sm:flex-col justify-between sm:justify-start items-center sm:items-end gap-2 pt-1 sm:pt-0 border-t sm:border-t-0 border-gray-200 dark:border-gray-800 sm:shrink-0">
                     <p class="font-bold text-blue-600 text-lg sm:text-xl">$${o.total.toFixed(2)}</p>
                     <label id="payment-badge-${escapeHTML(o.orderId)}" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm ${o.paymentConfirmed ? 'bg-emerald-100 text-emerald-900 border-emerald-400 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-600 ring-1 ring-emerald-400/30' : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60 dark:hover:bg-amber-950/60'}">
-                        <input type="checkbox" class="w-4 h-4 rounded text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer" ${o.paymentConfirmed ? 'checked' : ''} onchange="updateOrdPaymentStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', this.checked)">
-                        <span class="select-none font-bold">${o.paymentConfirmed ? '✓ Payment Confirmed' : 'Payment Confirmed'}</span>
+                        <input type="checkbox" class="w-4 h-4 shrink-0 rounded text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer" ${o.paymentConfirmed ? 'checked' : ''} onchange="updateOrdPaymentStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', this.checked)">
+                        <span class="select-none font-bold">PAYMENT</span>
                     </label>
                 </div>
             </div>
             <ul class="text-xs text-gray-700 dark:text-gray-300 my-2.5 list-disc pl-4 space-y-1 bg-white/60 dark:bg-black/20 p-2 rounded-lg border border-gray-200 dark:border-gray-800 break-words">
                 ${o.items.map(i => `<li class="break-words">${i.qty}x ${escapeHTML(i.name)}</li>`).join('')}
             </ul>
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3 pt-2 border-t border-gray-200 dark:border-gray-800">
-                <label class="text-xs font-bold flex items-center gap-1 cursor-pointer">
-                    <input type="radio" name="status_${escapeHTML(o.orderId)}" value="Not Collected" ${o.status !== 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', 'Not Collected')">
-                    <span class="text-red-500">Not Collected</span>
-                </label>
-                <label class="text-xs font-bold flex items-center gap-1 cursor-pointer">
-                    <input type="radio" name="status_${escapeHTML(o.orderId)}" value="Collected" ${o.status === 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', 'Collected')">
-                    <span class="text-green-500">Collected</span>
-                </label>
-                ${o.imageUrl && o.imageUrl !== 'No Image' ? `<a href="${escapeHTML(o.imageUrl)}" target="_blank" class="text-xs text-blue-500 hover:text-blue-600 font-bold ml-auto mr-3">View Receipt</a>` : '<span class="ml-auto"></span>'}
-                <button onclick="adminResendEmail('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-blue-500 transition-colors mr-3" title="Resend Email"><i class="fas fa-envelope text-sm"></i></button>
-                <button onclick="adminEditOrderModal('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-blue-500 transition-colors mr-3" title="Edit Order"><i class="fas fa-edit text-sm"></i></button>
-                <button onclick="adminDeleteOrder('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-red-500 transition-colors" title="Delete Order"><i class="fas fa-trash text-sm"></i></button>
+            <div class="flex flex-col gap-3 mt-3 pt-2 border-t border-gray-200 dark:border-gray-800">
+                <div class="flex items-center gap-4">
+                    <label class="text-xs font-bold flex items-center gap-1 cursor-pointer">
+                        <input type="radio" name="status_${escapeHTML(o.orderId)}" value="Not Collected" ${o.status !== 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', 'Not Collected')">
+                        <span class="text-red-500">Not Collected</span>
+                    </label>
+                    <label class="text-xs font-bold flex items-center gap-1 cursor-pointer">
+                        <input type="radio" name="status_${escapeHTML(o.orderId)}" value="Collected" ${o.status === 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', 'Collected')">
+                        <span class="text-green-500">Collected</span>
+                    </label>
+                </div>
+                <div class="flex items-center gap-4">
+                    ${o.imageUrl && o.imageUrl !== 'No Image' ? `<a href="${escapeHTML(o.imageUrl)}" target="_blank" class="text-xs text-blue-500 hover:text-blue-600 font-bold">View Receipt</a>` : ''}
+                    <button onclick="adminResendEmail('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-blue-500 transition-colors" title="Resend Email"><i class="fas fa-envelope text-sm"></i></button>
+                    <button onclick="adminEditOrderModal('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-blue-500 transition-colors" title="Edit Order"><i class="fas fa-edit text-sm"></i></button>
+                    <button onclick="adminDeleteOrder('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-red-500 transition-colors" title="Delete Order"><i class="fas fa-trash text-sm"></i></button>
+                </div>
             </div>
         </div>
     `).join('');
@@ -1150,7 +1154,7 @@ function filterAdminOrders() {
     });
 }
 
-function renderAdminSummary(orders, products) {
+function renderAdminSummary(orders, products, storeId) {
     if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700 dark:text-gray-400">No orders yet.</p>';
     
     let totalRevenue = 0;
@@ -1214,7 +1218,14 @@ function renderAdminSummary(orders, products) {
             <p class="text-lg font-bold text-gray-900 dark:text-gray-100">${topSelling.name} <span class="text-sm text-gray-500 dark:text-gray-400 font-normal ml-1">(${topSelling.qty} units)</span></p>
         </div>
         
-        <h4 class="font-bold text-sm mb-3 text-gray-900 dark:text-gray-100">Item Breakdown</h4>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-3">
+            <div class="flex items-center gap-3">
+                <h4 class="font-bold text-sm text-gray-900 dark:text-gray-100">Item Breakdown</h4>
+                <button id="exportVendorBtn" onclick="adminExportVendorOrder('${storeId}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors flex items-center gap-1.5"><i class="fas fa-file-export"></i> Export</button>
+                <a id="viewExportLink" href="#" target="_blank" class="hidden text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1"><i class="fas fa-external-link-alt"></i> View Sheet</a>
+            </div>
+            <button onclick="adminOpenVendorFolder('${storeId}')" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors flex items-center gap-1.5"><i class="fas fa-folder-open"></i> Open Vendor Folder</button>
+        </div>
         <div class="bg-white dark:bg-[#111] rounded-xl border border-gray-400 dark:border-gray-800 overflow-hidden">
             ${breakdownHtml}
         </div>
@@ -1227,10 +1238,10 @@ async function updateOrdPaymentStatus(eventId, orderId, isConfirmed) {
         const textSpan = badge.querySelector('span');
         if (isConfirmed) {
             badge.className = "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm bg-emerald-100 text-emerald-900 border-emerald-400 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-600 ring-1 ring-emerald-400/30";
-            if (textSpan) textSpan.textContent = "✓ Payment Confirmed";
+            if (textSpan) textSpan.innerHTML = "PAYMENT";
         } else {
             badge.className = "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60 dark:hover:bg-amber-950/60";
-            if (textSpan) textSpan.textContent = "Payment Confirmed";
+            if (textSpan) textSpan.innerHTML = "PAYMENT";
         }
     }
     await apiCall('ADMIN_UPDATE_ORDER_PAYMENT', { eventId, orderId, isConfirmed }, true);
@@ -1271,7 +1282,7 @@ async function adminDeleteOrder(eventId, orderId) {
     
     const panelSummary = document.getElementById('panel-summary');
     if (panelSummary) {
-        panelSummary.innerHTML = renderAdminSummary(State.ordersCache, State.productsCache);
+        panelSummary.innerHTML = renderAdminSummary(State.ordersCache, State.productsCache, eventId);
     }
 }
 
@@ -1447,11 +1458,59 @@ async function submitAdminEditOrder(eventId, orderId) {
         
         const panelSummary = document.getElementById('panel-summary');
         if (panelSummary) {
-            panelSummary.innerHTML = renderAdminSummary(State.ordersCache, State.productsCache);
+            panelSummary.innerHTML = renderAdminSummary(State.ordersCache, State.productsCache, eventId);
         }
         
         customAlert("Order updated successfully!");
     } catch(e) {
         console.error(e);
+    }
+}
+
+async function adminExportVendorOrder(eventId) {
+    const btn = document.getElementById('exportVendorBtn');
+    const link = document.getElementById('viewExportLink');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
+    btn.disabled = true;
+    
+    try {
+        const itemStats = {};
+        State.ordersCache.forEach(o => {
+            o.items.forEach(item => {
+                if (!itemStats[item.name]) itemStats[item.name] = { qty: 0, revenue: 0 };
+                itemStats[item.name].qty += item.qty;
+                itemStats[item.name].revenue += item.total;
+            });
+        });
+        
+        const statsArray = Object.keys(itemStats).map(name => ({
+            name,
+            price: itemStats[name].revenue / itemStats[name].qty,
+            qty: itemStats[name].qty,
+            revenue: itemStats[name].revenue
+        }));
+        
+        const store = State.masterConfig.stores.find(s => s.id === eventId);
+        const res = await apiCall('ADMIN_EXPORT_VENDOR_ORDER', { eventId, eventName: store.name, itemStats: statsArray }, true);
+        
+        link.href = res.sheetUrl;
+        link.classList.remove('hidden');
+        customAlert('Export successful!');
+    } catch(e) {
+        console.error(e);
+        customAlert('Export failed.');
+    } finally {
+        btn.innerHTML = '<i class="fas fa-file-export"></i> Export';
+        btn.disabled = false;
+    }
+}
+
+async function adminOpenVendorFolder(eventId) {
+    try {
+        const res = await apiCall('ADMIN_GET_VENDOR_FOLDER', { eventId }, true);
+        window.open(res.folderUrl, '_blank');
+    } catch(e) {
+        console.error(e);
+        customAlert('Failed to open folder.');
     }
 }
