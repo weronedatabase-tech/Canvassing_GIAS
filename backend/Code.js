@@ -136,24 +136,39 @@ function saveStoreConfig(payload) {
     delete payload.mimeType;
   }
   
-  if (payload.summaryFileBase64) {
+  if (payload.summaryImageBase64) {
     const folder = DriveApp.getFolderById(payload.id);
-    const ext = payload.summaryFileMimeType === 'application/pdf' ? 'pdf' : (payload.summaryFileMimeType === 'image/png' ? 'png' : 'jpg');
-    const blob = Utilities.newBlob(Utilities.base64Decode((payload.summaryFileBase64.includes(',') ? payload.summaryFileBase64.split(',')[1] : payload.summaryFileBase64)), payload.summaryFileMimeType, `Summary_${Date.now()}.${ext}`);
+    const ext = payload.summaryImageMimeType === 'image/png' ? 'png' : 'jpg';
+    const blob = Utilities.newBlob(Utilities.base64Decode((payload.summaryImageBase64.includes(',') ? payload.summaryImageBase64.split(',')[1] : payload.summaryImageBase64)), payload.summaryImageMimeType, `SummaryImage_${Date.now()}.${ext}`);
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    payload.summaryFileId = file.getId();
-    payload.summaryFileType = payload.summaryFileMimeType.startsWith('image/') ? 'image' : 'pdf';
-    payload.summaryFileName = payload.summaryFileName || `Summary File`;
-    delete payload.summaryFileBase64;
-    delete payload.summaryFileMimeType;
+    payload.summaryImageId = file.getId();
+    payload.summaryImageName = payload.summaryImageName || `Summary Image`;
+    delete payload.summaryImageBase64;
+    delete payload.summaryImageMimeType;
   }
   
-  if (payload.removeSummaryFile) {
-    payload.summaryFileId = null;
-    payload.summaryFileType = null;
-    payload.summaryFileName = null;
-    delete payload.removeSummaryFile;
+  if (payload.summaryPdfBase64) {
+    const folder = DriveApp.getFolderById(payload.id);
+    const blob = Utilities.newBlob(Utilities.base64Decode((payload.summaryPdfBase64.includes(',') ? payload.summaryPdfBase64.split(',')[1] : payload.summaryPdfBase64)), payload.summaryPdfMimeType, `SummaryPdf_${Date.now()}.pdf`);
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    payload.summaryPdfId = file.getId();
+    payload.summaryPdfName = payload.summaryPdfName || `Summary PDF`;
+    delete payload.summaryPdfBase64;
+    delete payload.summaryPdfMimeType;
+  }
+  
+  if (payload.removeSummaryImage) {
+    payload.summaryImageId = null;
+    payload.summaryImageName = null;
+    delete payload.removeSummaryImage;
+  }
+  
+  if (payload.removeSummaryPdf) {
+    payload.summaryPdfId = null;
+    payload.summaryPdfName = null;
+    delete payload.removeSummaryPdf;
   }
   
   if (idx > -1) {

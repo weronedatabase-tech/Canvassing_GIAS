@@ -275,11 +275,8 @@ async function renderStoreShop(container, storeId) {
         <div class="p-4 fade-in pb-24">
             <h2 class="text-xl font-bold flex items-center gap-2 mb-4"><i class="fas fa-store"></i> ${store.name} Items</h2>
             
-            ${store.summaryFileId ? (
-                store.summaryFileType === 'image' 
-                ? `<img src="https://lh3.googleusercontent.com/d/${store.summaryFileId}" class="w-full rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 mb-6 object-contain max-h-[60vh]">`
-                : `<a href="https://drive.google.com/file/d/${store.summaryFileId}/view" target="_blank" class="block w-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 py-3 px-4 rounded-xl font-bold mb-6 text-center border border-blue-200 dark:border-blue-800 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-file-pdf mr-2"></i> View ${store.summaryFileName || 'Products Summary'}</a>`
-            ) : ''}
+            ${store.summaryImageId ? `<img src="https://lh3.googleusercontent.com/d/${store.summaryImageId}" class="w-full rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 mb-6 object-contain max-h-[60vh]">` : ''}
+            ${store.summaryPdfId ? `<a href="https://drive.google.com/file/d/${store.summaryPdfId}/view" target="_blank" class="block w-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 py-3 px-4 rounded-xl font-bold mb-6 text-center border border-blue-200 dark:border-blue-800 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-file-pdf mr-2"></i> View ${store.summaryPdfName || 'Products Summary PDF'}</a>` : ''}
             
             <div class="grid grid-cols-1 gap-4" id="productList">
                 ${State.products.length === 0 ? '<p>No items.</p>' : State.products.map(p => {
@@ -294,11 +291,11 @@ async function renderStoreShop(container, storeId) {
 
                     return `
                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-3 flex gap-3 border dark:border-gray-700">
-                        ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-24 h-24 object-cover rounded-md">` : '<div class="w-24 h-24 bg-gray-200 rounded-md flex items-center justify-center text-gray-400">No Image</div>'}
+                        ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-24 h-24 shrink-0 self-start object-cover rounded-md">` : '<div class="w-24 h-24 shrink-0 self-start bg-gray-200 rounded-md flex items-center justify-center text-gray-400">No Image</div>'}
                         <div class="flex-1 min-w-0 flex flex-col justify-between">
                             <div>
                                 <h3 class="font-bold text-lg leading-tight dark:text-white break-words">${escapeHTML(p.name)}</h3>
-                                <p class="text-xs text-gray-700 dark:text-gray-400 line-clamp-2 mt-1 break-words">${escapeHTML(p.description || '')}</p>
+                                <p class="text-xs text-gray-700 dark:text-gray-400 mt-1 break-words whitespace-pre-wrap">${escapeHTML(p.description || '')}</p>
                             </div>
                             <div class="flex justify-between items-end mt-2">
                                 <span class="font-bold text-blue-600 dark:text-blue-400 text-lg">$${p.price.toFixed(2)}</span>
@@ -792,7 +789,7 @@ function renderAdminProductsList(products, storeId) {
             ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-12 h-12 object-cover rounded-lg">` : ''}
             <div class="flex-1 min-w-0">
                 <p class="font-bold text-sm text-gray-900 dark:text-gray-100 break-words">${escapeHTML(p.name)}</p>
-                ${p.description ? `<p class="text-xs text-gray-700 dark:text-gray-400 line-clamp-1 mt-0.5 break-words">${escapeHTML(p.description)}</p>` : ''}
+                ${p.description ? `<p class="text-xs text-gray-700 dark:text-gray-400 mt-0.5 break-words whitespace-pre-wrap">${escapeHTML(p.description)}</p>` : ''}
                 <p class="text-xs font-semibold text-gray-600 dark:text-gray-400 mt-0.5">$${p.price.toFixed(2)}</p>
             </div>
             <button onclick="adminDeleteProduct('${storeId}', '${escapeHTML(p.id).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-red-500 transition-colors p-2 ml-1"><i class="fas fa-trash"></i></button>
@@ -868,17 +865,29 @@ async function manageStore(storeId, initialTab = 'info') {
             <div id="panel-products" class="hidden">
                 <div class="bg-gray-50 dark:bg-[#1a1a1a] p-3 md:p-4 rounded-xl border border-gray-400 dark:border-gray-800 mb-4">
                     <h4 class="font-bold text-sm mb-3">Products' Summary List Image / File</h4>
-                    ${config.summaryFileId ? `
+                    ${config.summaryImageId ? `
                         <div class="mb-3 p-2 bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 flex justify-between items-center gap-2">
-                            <span class="text-xs text-green-600 dark:text-green-400 font-bold flex-1 min-w-0 break-all"><i class="fas fa-check-circle mr-1"></i> Current: ${escapeHTML(config.summaryFileName || 'File uploaded')}</span>
-                            <button onclick="adminRemoveSummaryFile('${storeId}')" class="text-red-500 hover:text-red-700 text-xs font-bold shrink-0"><i class="fas fa-trash"></i> Remove</button>
+                            <span class="text-xs text-green-600 dark:text-green-400 font-bold flex-1 min-w-0 break-all"><i class="fas fa-check-circle mr-1"></i> Image: ${escapeHTML(config.summaryImageName || 'Image uploaded')}</span>
+                            <button onclick="adminRemoveSummaryFile('${storeId}', 'image')" class="text-red-500 hover:text-red-700 text-xs font-bold shrink-0"><i class="fas fa-trash"></i> Remove</button>
                         </div>
                     ` : ''}
                     <div class="mb-3 relative">
-                        <label id="summaryFileLabel" for="summaryFile" class="block w-full text-center p-3 px-4 border border-dashed border-gray-400 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors break-all overflow-hidden">Choose Products Summary List Image / File</label>
-                        <input type="file" id="summaryFile" accept="image/*,application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('summaryFileLabel').textContent = this.files[0] ? this.files[0].name : 'Choose Products Summary List Image / File'">
+                        <label id="summaryImageLabel" for="summaryImage" class="block w-full text-center p-3 px-4 border border-dashed border-gray-400 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors break-all overflow-hidden">Choose Products Summary Image</label>
+                        <input type="file" id="summaryImage" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('summaryImageLabel').textContent = this.files[0] ? this.files[0].name : 'Choose Products Summary Image'">
                     </div>
-                    <button onclick="adminUploadSummaryFile('${storeId}')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold text-sm transition-transform active:scale-95 hover:bg-blue-700">Upload File</button>
+                    <button onclick="adminUploadSummaryFile('${storeId}', 'image')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold text-sm transition-transform active:scale-95 hover:bg-blue-700 mb-4">Upload Image</button>
+
+                    ${config.summaryPdfId ? `
+                        <div class="mb-3 p-2 bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 flex justify-between items-center gap-2">
+                            <span class="text-xs text-green-600 dark:text-green-400 font-bold flex-1 min-w-0 break-all"><i class="fas fa-check-circle mr-1"></i> PDF: ${escapeHTML(config.summaryPdfName || 'PDF uploaded')}</span>
+                            <button onclick="adminRemoveSummaryFile('${storeId}', 'pdf')" class="text-red-500 hover:text-red-700 text-xs font-bold shrink-0"><i class="fas fa-trash"></i> Remove</button>
+                        </div>
+                    ` : ''}
+                    <div class="mb-3 relative">
+                        <label id="summaryPdfLabel" for="summaryPdf" class="block w-full text-center p-3 px-4 border border-dashed border-gray-400 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors break-all overflow-hidden">Choose Products Summary PDF</label>
+                        <input type="file" id="summaryPdf" accept="application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('summaryPdfLabel').textContent = this.files[0] ? this.files[0].name : 'Choose Products Summary PDF'">
+                    </div>
+                    <button onclick="adminUploadSummaryFile('${storeId}', 'pdf')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold text-sm transition-transform active:scale-95 hover:bg-blue-700 mb-2">Upload PDF</button>
                 </div>
                 <div class="bg-gray-50 dark:bg-[#1a1a1a] p-3 md:p-4 rounded-xl border border-gray-400 dark:border-gray-800 mb-4">
                     <h4 class="font-bold text-sm mb-3">Add Product</h4>
@@ -886,7 +895,7 @@ async function manageStore(storeId, initialTab = 'info') {
                         <input type="text" id="pName" placeholder="Name" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg text-sm dark:bg-[#222]">
                         <input type="number" id="pPrice" placeholder="Price" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg text-sm dark:bg-[#222]">
                     </div>
-                    <input type="text" id="pDesc" placeholder="Description" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg mb-2 text-sm dark:bg-[#222]">
+                    <textarea id="pDesc" placeholder="Description" rows="1" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg mb-2 text-sm dark:bg-[#222] resize-none overflow-hidden" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px'"></textarea>
                     <div class="mb-3 relative">
                         <label for="pImg" class="block w-full text-center p-2 border border-dashed border-gray-400 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Choose Product Image</label>
                         <input type="file" id="pImg" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="this.previousElementSibling.textContent = this.files[0] ? this.files[0].name : 'Choose Product Image'">
@@ -1046,18 +1055,17 @@ async function saveStoreSettings(id) {
     renderAdminDashboard(document.getElementById('app-container'), true);
 }
 
-async function adminUploadSummaryFile(eventId) {
-    const fileInput = document.getElementById('summaryFile');
+async function adminUploadSummaryFile(eventId, type) {
+    const fileInput = document.getElementById(type === 'image' ? 'summaryImage' : 'summaryPdf');
     if (!fileInput.files || fileInput.files.length === 0) {
         customAlert('Please select a file first.');
         return;
     }
     const file = fileInput.files[0];
-    const isPdf = file.type === 'application/pdf';
     let summaryFileBase64 = null;
     let summaryFileMimeType = file.type;
     
-    if (isPdf) {
+    if (type === 'pdf') {
         summaryFileBase64 = await new Promise((resolve) => {
             const reader = new FileReader();
             reader.onload = e => resolve(e.target.result);
@@ -1068,11 +1076,21 @@ async function adminUploadSummaryFile(eventId) {
         summaryFileMimeType = 'image/jpeg';
     }
     
-    State.masterConfig = await apiCall('ADMIN_SAVE_STORE', { payload: { id: eventId, summaryFileBase64, summaryFileMimeType, summaryFileName: file.name } });
+    const payload = { id: eventId };
+    if (type === 'image') {
+        payload.summaryImageBase64 = summaryFileBase64;
+        payload.summaryImageMimeType = summaryFileMimeType;
+        payload.summaryImageName = file.name;
+    } else {
+        payload.summaryPdfBase64 = summaryFileBase64;
+        payload.summaryPdfMimeType = summaryFileMimeType;
+        payload.summaryPdfName = file.name;
+    }
+    
+    State.masterConfig = await apiCall('ADMIN_SAVE_STORE', { payload });
     saveState();
     manageStore(eventId, 'products');
 }
-
 async function adminRemoveSummaryFile(eventId) {
     if(await customConfirm("Remove summary file?")) {
         State.masterConfig = await apiCall('ADMIN_SAVE_STORE', { payload: { id: eventId, removeSummaryFile: true } });
