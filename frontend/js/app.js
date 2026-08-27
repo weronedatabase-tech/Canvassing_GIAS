@@ -90,7 +90,16 @@ async function apiCall(action, payload = {}, skipLoading = false) {
         const body = { action, ...payload };
         if (State.adminToken) body.password = State.adminToken;
         const res = await fetch('/api/gas', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-        const json = await res.json();
+        const text = await res.text();
+        let json;
+        try {
+            json = JSON.parse(text);
+        } catch (err) {
+            if (text.trim().startsWith('<')) {
+                throw new Error("Received an HTML error page from the server. This could be a temporary connection issue, a server timeout, or a misconfigured Apps Script. Please try again.");
+            }
+            throw new Error("Failed to parse server response: " + err.message);
+        }
         
         if (!json.success) {
             // Detect if the user is hitting the old GAS deployment
@@ -654,7 +663,14 @@ async function handleAdminLogin(e) {
             method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({password: pwd})
         });
-        const json = await res.json();
+        const text = await res.text();
+        let json;
+        try {
+            json = JSON.parse(text);
+        } catch (e) {
+            if (text.trim().startsWith('<')) throw new Error("Server returned HTML. Possible connection issue.");
+            throw e;
+        }
         if(json.success) {
             localStorage.setItem('adminToken', pwd);
             State.adminToken = pwd;

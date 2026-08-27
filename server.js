@@ -36,7 +36,21 @@ app.post('/api/gas', async (req, res) => {
       headers: { 'Content-Type': 'text/plain' } // GAS prefers text/plain for CORS bypassing in some cases, or application/json. 
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      if (text.trim().startsWith('<')) {
+        let hint = "This usually means your Google Apps Script Web App is misconfigured. Ensure it is deployed with 'Execute as: Me' and 'Who has access: Anyone'.";
+        if (text.includes('Google Drive') && text.includes('Page not found')) hint = "The GAS_URL is invalid or the script was deleted.";
+        else if (text.includes('accounts.google.com')) hint = "The script requires login. Deploy it with 'Execute as: Me' and 'Access: Anyone'.";
+        else hint += " It could also be a temporary Google server error (500/502) or a payload that is too large.";
+        throw new Error(`The backend returned an HTML page instead of JSON. ${hint}`);
+      }
+      throw new Error("Failed to parse response from Apps Script: " + e.message);
+    }
+    
     res.json(data);
   } catch (error) {
     console.error("GAS Proxy Error:", error);
