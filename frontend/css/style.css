@@ -70,3 +70,13 @@ html.dark .ql-snow .ql-toolbar button:hover .ql-stroke {
     scrollbar-width: none;  /* Firefox */
 }
 html.dark .password-toggle { color: #a1a1aa; }
+
+/* Future-proof dark mode text readability for rich text pasted content */
+html.dark .prose [style^="color:"],
+html.dark .prose [style*=" color:"],
+html.dark .prose [style*=";color:"],
+html.dark .ql-editor [style^="color:"],
+html.dark .ql-editor [style*=" color:"],
+html.dark .ql-editor [style*=";color:"] {
+    color: inherit !important;
+}
