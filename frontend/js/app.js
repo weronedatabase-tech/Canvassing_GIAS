@@ -398,7 +398,7 @@ async function renderCartPage(container) {
                     <div class="flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded shadow">
                         <div>
                             <p class="font-bold">${escapeHTML(c.name)}</p>
-                            <p class="text-sm text-gray-700">$${c.price.toFixed(2)} x ${c.qty} = <span class="font-bold text-gray-900 dark:text-white">$${(c.price * c.qty).toFixed(2)}</span></p>
+                            <p class="text-sm text-gray-700 dark:text-gray-400">$${c.price.toFixed(2)} x ${c.qty} = <span class="font-bold text-gray-900 dark:text-white">$${(c.price * c.qty).toFixed(2)}</span></p>
                         </div>
                         <div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded border border-blue-100 dark:border-gray-600">
                             <button onclick="updateQty('${c.id}', -1)" class="w-8 h-8 font-bold text-blue-600">-</button>
@@ -721,7 +721,7 @@ async function renderAdminDashboard(container, forceRefresh = false) {
                         <div class="border border-gray-400 dark:border-gray-800 p-3.5 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition-all ${actuallyOpen ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-red-50/50 dark:bg-red-900/10'}">
                             <div class="w-full sm:w-auto flex-1 pr-2">
                                 <h4 class="font-semibold text-gray-900 dark:text-gray-100 leading-tight">${escapeHTML(s.name)}</h4>
-                                <p class="text-xs mt-1 text-gray-700">Status: <span class="font-bold ${actuallyOpen ? 'text-green-600 dark:text-green-400' : 'text-red-500'}">${statusText}</span></p>
+                                <p class="text-xs mt-1 text-gray-700 dark:text-gray-400">Status: <span class="font-bold ${actuallyOpen ? 'text-green-600 dark:text-green-400' : 'text-red-500'}">${statusText}</span></p>
                             </div>
                             <div class="w-full sm:w-auto flex justify-end gap-2 text-sm shrink-0 items-center">
                                 <button onclick="toggleStoreStatus('${s.id}', ${!s.isOpen})" class="bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 px-3 py-1.5 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">${s.isOpen ? 'Set Closed' : 'Set Open'}</button>
