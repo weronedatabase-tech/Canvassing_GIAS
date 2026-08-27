@@ -261,13 +261,8 @@ async function renderStoreShop(container, storeId) {
     State.activeStoreId = storeId;
     saveState();
     
-    const cachedProducts = sessionStorage.getItem(`products_${storeId}`);
-    if (cachedProducts) {
-        State.products = JSON.parse(cachedProducts);
-    } else {
-        State.products = await apiCall('GET_STORE', { eventId: storeId });
-        sessionStorage.setItem(`products_${storeId}`, JSON.stringify(State.products));
-    }
+    State.products = await apiCall('GET_STORE', { eventId: storeId });
+    sessionStorage.setItem(`products_${storeId}`, JSON.stringify(State.products));
     
     updateCartCount();
 
@@ -291,7 +286,7 @@ async function renderStoreShop(container, storeId) {
 
                     return `
                     <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-3 flex gap-3 border dark:border-gray-700">
-                        ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-24 h-24 shrink-0 self-start object-cover rounded-md">` : '<div class="w-24 h-24 shrink-0 self-start bg-gray-200 rounded-md flex items-center justify-center text-gray-400">No Image</div>'}
+                        ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-24 h-24 shrink-0 self-start object-cover rounded-md">` : '<div class="w-24 h-24 shrink-0 self-start bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center text-gray-400">No Image</div>'}
                         <div class="flex-1 min-w-0 flex flex-col justify-between">
                             <div>
                                 <h3 class="font-bold text-lg leading-tight dark:text-white break-words">${escapeHTML(p.name)}</h3>
@@ -732,11 +727,11 @@ async function promptDeleteEvent(eventId, eventName) {
         <div class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border border-gray-200 dark:border-gray-800">
             <h3 class="text-lg font-bold mb-3 text-red-600">Delete Event</h3>
             <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">You are about to delete <strong>${eventName}</strong>.</p>
-            <p class="text-xs text-gray-500 mb-4">This action cannot be undone. To confirm, type <strong>delete</strong> below:</p>
-            <input type="text" id="delete-confirm-input" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-red-500 mb-6" placeholder="Type delete here">
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">This action cannot be undone. To confirm, type <strong>delete</strong> below:</p>
+            <input type="text" id="delete-confirm-input" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 mb-6" placeholder="Type delete here">
             <div class="flex justify-end gap-3">
                 <button class="flex-1 bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 px-4 py-2 rounded-lg text-sm font-bold" id="cd-cancel">Cancel</button>
-                <button class="flex-1 bg-gray-300 text-white px-4 py-2 rounded-lg text-sm font-bold cursor-not-allowed transition-colors" id="cd-ok" disabled>Delete Event</button>
+                <button class="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold opacity-50 cursor-not-allowed transition-colors" id="cd-ok" disabled>Delete Event</button>
             </div>
         </div>
     `;
@@ -748,12 +743,12 @@ async function promptDeleteEvent(eventId, eventName) {
     input.addEventListener('input', (e) => {
         if (e.target.value === 'delete') {
             okBtn.disabled = false;
-            okBtn.classList.remove('bg-gray-300', 'cursor-not-allowed');
-            okBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+            okBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            okBtn.classList.add('hover:bg-red-700');
         } else {
             okBtn.disabled = true;
-            okBtn.classList.add('bg-gray-300', 'cursor-not-allowed');
-            okBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+            okBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            okBtn.classList.remove('hover:bg-red-700');
         }
     });
 
@@ -810,6 +805,7 @@ async function manageStore(storeId, initialTab = 'info') {
     
     State.ordersCache = orders;
     State.productsCache = products;
+    sessionStorage.setItem(`products_${storeId}`, JSON.stringify(products));
 
     area.innerHTML = `
         <div class="p-3 md:p-4 fade-in pb-16">
@@ -842,7 +838,7 @@ async function manageStore(storeId, initialTab = 'info') {
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">PayNow Number</label>
-                    <input type="text" id="stPaynow" value="${config.paynowNumber || ''}" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg dark:bg-[#1a1a1a] text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 transition-all">
+                    <input type="text" id="stPaynow" value="${config.paynowNumber || ''}" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg dark:bg-[#1a1a1a] text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Banner Image (Will overwrite existing)</label>
@@ -872,7 +868,7 @@ async function manageStore(storeId, initialTab = 'info') {
                         </div>
                     ` : ''}
                     <div class="mb-3 relative">
-                        <label id="summaryImageLabel" for="summaryImage" class="block w-full text-center p-3 px-4 border border-dashed border-gray-400 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors break-all overflow-hidden">Choose Products Summary Image</label>
+                        <label id="summaryImageLabel" for="summaryImage" class="block w-full text-center p-3 px-4 border border-dashed border-gray-400 dark:border-gray-600 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors break-all overflow-hidden">Choose Products Summary Image</label>
                         <input type="file" id="summaryImage" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('summaryImageLabel').textContent = this.files[0] ? this.files[0].name : 'Choose Products Summary Image'">
                     </div>
                     <button onclick="adminUploadSummaryFile('${storeId}', 'image')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold text-sm transition-transform active:scale-95 hover:bg-blue-700 mb-4">Upload Image</button>
@@ -884,7 +880,7 @@ async function manageStore(storeId, initialTab = 'info') {
                         </div>
                     ` : ''}
                     <div class="mb-3 relative">
-                        <label id="summaryPdfLabel" for="summaryPdf" class="block w-full text-center p-3 px-4 border border-dashed border-gray-400 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors break-all overflow-hidden">Choose Products Summary PDF</label>
+                        <label id="summaryPdfLabel" for="summaryPdf" class="block w-full text-center p-3 px-4 border border-dashed border-gray-400 dark:border-gray-600 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors break-all overflow-hidden">Choose Products Summary PDF</label>
                         <input type="file" id="summaryPdf" accept="application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('summaryPdfLabel').textContent = this.files[0] ? this.files[0].name : 'Choose Products Summary PDF'">
                     </div>
                     <button onclick="adminUploadSummaryFile('${storeId}', 'pdf')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold text-sm transition-transform active:scale-95 hover:bg-blue-700 mb-2">Upload PDF</button>
@@ -892,12 +888,12 @@ async function manageStore(storeId, initialTab = 'info') {
                 <div class="bg-gray-50 dark:bg-[#1a1a1a] p-3 md:p-4 rounded-xl border border-gray-400 dark:border-gray-800 mb-4">
                     <h4 class="font-bold text-sm mb-3">Add Product</h4>
                     <div class="grid grid-cols-2 gap-2 mb-2">
-                        <input type="text" id="pName" placeholder="Name" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg text-sm dark:bg-[#222]">
-                        <input type="number" id="pPrice" placeholder="Price" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg text-sm dark:bg-[#222]">
+                        <input type="text" id="pName" placeholder="Name" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-[#222]">
+                        <input type="number" id="pPrice" placeholder="Price" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-[#222]">
                     </div>
-                    <textarea id="pDesc" placeholder="Description" rows="1" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg mb-2 text-sm dark:bg-[#222] resize-none overflow-hidden" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px'"></textarea>
+                    <textarea id="pDesc" placeholder="Description" rows="1" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg mb-2 text-sm bg-white dark:bg-[#222] resize-none overflow-hidden" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px'"></textarea>
                     <div class="mb-3 relative">
-                        <label for="pImg" class="block w-full text-center p-2 border border-dashed border-gray-400 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Choose Product Image</label>
+                        <label for="pImg" class="block w-full text-center p-2 border border-dashed border-gray-400 dark:border-gray-600 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Choose Product Image</label>
                         <input type="file" id="pImg" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="this.previousElementSibling.textContent = this.files[0] ? this.files[0].name : 'Choose Product Image'">
                     </div>
                     <button onclick="adminAddProduct('${storeId}')" class="w-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 py-2 rounded-lg font-bold text-sm transition-transform active:scale-95">Add Item</button>
@@ -977,6 +973,7 @@ async function manageStore(storeId, initialTab = 'info') {
                     
                     const movedItem = State.productsCache.splice(oldIndex, 1)[0];
                     State.productsCache.splice(newIndex, 0, movedItem);
+                    sessionStorage.setItem(`products_${storeId}`, JSON.stringify(State.productsCache));
                     
                     // Save array of IDs in the new order
                     const productIds = State.productsCache.map(p => p.id);
@@ -1091,9 +1088,15 @@ async function adminUploadSummaryFile(eventId, type) {
     saveState();
     manageStore(eventId, 'products');
 }
-async function adminRemoveSummaryFile(eventId) {
+async function adminRemoveSummaryFile(eventId, type) {
     if(await customConfirm("Remove summary file?")) {
-        State.masterConfig = await apiCall('ADMIN_SAVE_STORE', { payload: { id: eventId, removeSummaryFile: true } });
+        const payload = { id: eventId };
+        if (type === 'image') {
+            payload.removeSummaryImage = true;
+        } else {
+            payload.removeSummaryPdf = true;
+        }
+        State.masterConfig = await apiCall('ADMIN_SAVE_STORE', { payload });
         saveState();
         manageStore(eventId, 'products');
     }
@@ -1112,14 +1115,45 @@ async function adminAddProduct(eventId) {
         description: document.getElementById('pDesc').value,
         imageBase64, mimeType
     };
-    await apiCall('ADMIN_SAVE_PRODUCT', { eventId, product });
-    manageStore(eventId, 'products'); // reload section and stay on tab
+    const updatedProducts = await apiCall('ADMIN_SAVE_PRODUCT', { eventId, product });
+    State.productsCache = updatedProducts;
+    sessionStorage.setItem(`products_${eventId}`, JSON.stringify(updatedProducts));
+    // manageStore(eventId, 'products');
+    document.getElementById('pName').value = '';
+    document.getElementById('pPrice').value = '';
+    document.getElementById('pDesc').value = '';
+    const pImg = document.getElementById('pImg');
+    if (pImg) {
+        pImg.value = '';
+        if (pImg.previousElementSibling) {
+            pImg.previousElementSibling.textContent = 'Choose Product Image';
+        }
+    }
+    document.getElementById('adminProductsList').innerHTML = renderAdminProductsList(State.productsCache, eventId);
+    const productsListEl = document.getElementById('adminProductsList');
+    if (productsListEl && window.Sortable) {
+        new Sortable(productsListEl, {
+            handle: '.drag-handle',
+            animation: 150,
+            onEnd: async function (evt) {
+                const oldIndex = evt.oldIndex;
+                const newIndex = evt.newIndex;
+                if (oldIndex === newIndex) return;
+                const movedItem = State.productsCache.splice(oldIndex, 1)[0];
+                State.productsCache.splice(newIndex, 0, movedItem);
+                sessionStorage.setItem(`products_${eventId}`, JSON.stringify(State.productsCache));
+                const productIds = State.productsCache.map(p => p.id);
+                await apiCall('ADMIN_REORDER_PRODUCTS', { eventId, productIds }, true);
+            }
+        });
+    }
 }
 
 async function adminDeleteProduct(eventId, productId) {
     if(await customConfirm("Delete item?")) {
         await apiCall('ADMIN_DELETE_PRODUCT', { eventId, productId });
         State.productsCache = State.productsCache.filter(p => p.id !== productId);
+        sessionStorage.setItem(`products_${eventId}`, JSON.stringify(State.productsCache));
         document.getElementById('adminProductsList').innerHTML = renderAdminProductsList(State.productsCache, eventId);
     }
 }
@@ -1362,7 +1396,7 @@ function adminEditOrderModal(eventId, orderId) {
             <div class="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-800">
                 <div class="flex flex-col">
                     <span class="text-sm font-bold">${escapeHTML(p.name)}</span>
-                    <span class="text-xs text-gray-500">$${p.price.toFixed(2)}</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">$${p.price.toFixed(2)}</span>
                 </div>
                 <div class="flex items-center gap-2">
                     <button type="button" class="bg-gray-200 dark:bg-gray-800 rounded px-2 text-sm" onclick="this.nextElementSibling.value = Math.max(0, parseInt(this.nextElementSibling.value) - 1)">-</button>
