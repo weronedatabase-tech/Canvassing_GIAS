@@ -270,7 +270,13 @@ async function renderStoreShop(container, storeId) {
         <div class="p-4 fade-in pb-24">
             <h2 class="text-xl font-bold flex items-center gap-2 mb-4"><i class="fas fa-store"></i> ${store.name} Items</h2>
             
-            ${store.summaryImageId ? `<img src="https://lh3.googleusercontent.com/d/${store.summaryImageId}" class="w-full rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 mb-6 object-contain max-h-[60vh]">` : ''}
+            ${store.summaryImageId ? `
+            <div class="relative w-full rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 mb-6 overflow-hidden bg-white dark:bg-[#1a1a1a] z-10" style="height: 60vh;">
+                <img src="https://lh3.googleusercontent.com/d/${store.summaryImageId}" id="summaryZoomImage" class="w-full h-full object-contain">
+                <div class="absolute bottom-3 right-3 bg-black/60 text-white text-[10px] font-bold px-2 py-1.5 rounded-lg pointer-events-none flex items-center gap-1.5 shadow-sm z-20">
+                    <i class="fas fa-search-plus"></i> Pinch to zoom
+                </div>
+            </div>` : ''}
             ${store.summaryPdfId ? `<a href="https://drive.google.com/file/d/${store.summaryPdfId}/view" target="_blank" class="block w-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 py-3 px-4 rounded-xl font-bold mb-6 text-center border border-blue-200 dark:border-blue-800 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-file-pdf mr-2"></i> View ${store.summaryPdfName || 'Products Summary PDF'}</a>` : ''}
             
             <div class="grid grid-cols-1 gap-4" id="productList">
@@ -311,6 +317,18 @@ async function renderStoreShop(container, storeId) {
             </div>
         </div>
     `;
+
+    setTimeout(() => {
+        const img = document.getElementById('summaryZoomImage');
+        if (img && typeof panzoom !== 'undefined') {
+            panzoom(img, {
+                maxZoom: 5,
+                minZoom: 1,
+                bounds: true,
+                boundsPadding: 0.1
+            });
+        }
+    }, 100);
 }
 
 function updateQty(id, delta) {
@@ -1069,7 +1087,7 @@ async function adminUploadSummaryFile(eventId, type) {
             reader.readAsDataURL(file);
         });
     } else {
-        summaryFileBase64 = await compressImage(file, 800);
+        summaryFileBase64 = await compressImage(file, 2400);
         summaryFileMimeType = 'image/jpeg';
     }
     
