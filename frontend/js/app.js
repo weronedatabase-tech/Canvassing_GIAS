@@ -467,24 +467,32 @@ function generatePayNowString(proxyValue, amount, ref) {
     return payload + crc;
 }
 
+function getCheckoutOrderId(storeName) {
+    let currentOrderRef = sessionStorage.getItem('currentOrderRef');
+    if (!currentOrderRef) {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        currentOrderRef = '';
+        for (let i = 0; i < 6; i++) currentOrderRef += chars.charAt(Math.floor(Math.random() * chars.length));
+        sessionStorage.setItem('currentOrderRef', currentOrderRef);
+    }
+    return `${storeName} - ${currentOrderRef}`;
+}
+
 async function renderCheckout(container) {
     const store = State.masterConfig.stores.find(s => s.id === State.activeStoreId);
-    
-    // Generate order ID early for the QR reference
-    const rand = Math.floor(1000 + Math.random() * 9000);
-    const tempOrderId = `${store.name} - <PHONE> - ${rand}`; 
+    const finalOrderId = getCheckoutOrderId(store.name);
 
     container.innerHTML = `
         <div class="p-4 fade-in pb-10">
             <h2 class="text-xl font-bold mb-4">Checkout</h2>
             
-            <form id="checkoutForm" onsubmit="handleOrderSubmit(event, '${rand}')" class="space-y-4">
+            <form id="checkoutForm" onsubmit="handleOrderSubmit(event)" class="space-y-4">
                 
                 <div class="bg-white dark:bg-gray-800 p-4 rounded shadow border border-gray-400 dark:border-gray-700">
                     <h3 class="font-bold mb-3 border-b pb-2 dark:border-gray-700">1. Your Details</h3>
                     <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Full Name</label><input type="text" id="custName" required class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
                     <div class="grid grid-cols-2 gap-3 mt-3">
-                        <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">WhatsApp No.</label><input type="tel" id="custPhone" oninput="updateQrRef(this.value, '${rand}')" required pattern="^[89][0-9]{7}$" placeholder="8 digits" class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
+                        <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">WhatsApp No.</label><input type="tel" id="custPhone" oninput="checkPhoneForPayment(this.value)" required pattern="^[89][0-9]{7}$" placeholder="8 digits" class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
                         <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Email</label><input type="email" id="custEmail" required class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
                     </div>
                     <div class="mt-3">
@@ -512,7 +520,7 @@ async function renderCheckout(container) {
                         <div>
                             <p class="text-sm">Pay: <span class="text-xl font-bold text-purple-700 dark:text-purple-400">$${getCartTotal()}</span></p>
                             <p class="text-sm">To: <span class="font-mono font-bold">${store.paynowNumber || 'Not Set'}</span></p>
-                            <p class="text-xs bg-purple-100 dark:bg-purple-900 px-2 py-1 rounded mt-1">Ref: <span id="qrRefDisplay" class="font-mono font-bold">${store.name} - ____ - ${rand}</span></p>
+                            <p class="text-xs bg-purple-100 dark:bg-purple-900 px-2 py-1 rounded mt-1">Ref: <span id="qrRefDisplay" class="font-mono font-bold">${escapeHTML(finalOrderId)}</span></p>
                         </div>
                     </div>
                     
@@ -527,8 +535,7 @@ async function renderCheckout(container) {
         </div>
     `;
 
-    // Render initial QR (will update when phone is typed)
-    renderQR(store.paynowNumber, getCartTotal(), `${store.name} - 00000000 - ${rand}`);
+    renderQR(store.paynowNumber, getCartTotal(), finalOrderId);
 }
 
 function handleCustTypeChange() {
@@ -552,13 +559,7 @@ function handleCustTypeChange() {
     }
 }
 
-function updateQrRef(phone, rand) {
-    const val = phone.length >= 4 ? phone : '____';
-    const store = State.masterConfig.stores.find(s => s.id === State.activeStoreId);
-    const ref = `${store.name} - ${val} - ${rand}`;
-    document.getElementById('qrRefDisplay').innerText = ref;
-    renderQR(store.paynowNumber, getCartTotal(), ref);
-    
+function checkPhoneForPayment(phone) {
     const paymentSection = document.getElementById('paymentSection');
     const submitBtn = document.getElementById('submitOrderBtn');
     
@@ -591,7 +592,7 @@ function fileToBase64(file) {
     });
 }
 
-async function handleOrderSubmit(e, rand) {
+async function handleOrderSubmit(e) {
     e.preventDefault();
     const phone = document.getElementById('custPhone').value;
     const name = document.getElementById('custName').value;
@@ -606,9 +607,8 @@ async function handleOrderSubmit(e, rand) {
         mimeType = 'image/jpeg';
     }
 
-    const val = phone.length >= 4 ? phone : '____';
     const store = State.masterConfig.stores.find(s => s.id === State.activeStoreId);
-    const finalOrderId = `${store.name} - ${val} - ${rand}`;
+    const finalOrderId = getCheckoutOrderId(store.name);
 
     const payload = {
         orderId: finalOrderId,
@@ -621,6 +621,7 @@ async function handleOrderSubmit(e, rand) {
     const res = await apiCall('SUBMIT_ORDER', { eventId: State.activeStoreId, order: payload });
     State.cart = [];
     updateCartCount();
+    sessionStorage.removeItem('currentOrderRef');
     saveState();
     
     if (res.emailStatus && res.emailStatus.startsWith("Failed")) {
