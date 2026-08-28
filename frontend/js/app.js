@@ -513,7 +513,7 @@ async function renderCheckout(container) {
 
                 <div id="paymentSection" class="hidden bg-white dark:bg-gray-800 border-2 border-purple-800 p-4 rounded shadow relative">
                     <h3 class="font-bold mb-2">2. Payment</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">PayNow to the number below or scan QR.</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4"><span class="font-bold text-purple-700 dark:text-purple-400 text-base">PayNow</span> using the QR code below. Screenshot this page to save QR code</p>
                     
                     <div class="flex items-center gap-4">
                         <canvas id="qrCanvas" class="w-32 h-32 bg-white p-1 rounded"></canvas>
@@ -525,7 +525,7 @@ async function renderCheckout(container) {
                     </div>
                     
                     <div class="mt-4">
-                        <label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase mb-1">Upload Successful Payment Screenshot</label>
+                        <label class="block text-sm font-extrabold text-blue-700 dark:text-blue-400 uppercase mb-1">Upload Successful Payment Screenshot</label>
                         <input type="file" id="paymentProof" accept="image/*" required class="w-full text-sm">
                     </div>
                 </div>
