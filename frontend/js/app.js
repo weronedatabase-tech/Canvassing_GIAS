@@ -475,7 +475,7 @@ function getCheckoutOrderId(storeName) {
         for (let i = 0; i < 6; i++) currentOrderRef += chars.charAt(Math.floor(Math.random() * chars.length));
         sessionStorage.setItem('currentOrderRef', currentOrderRef);
     }
-    return `${storeName} - ${currentOrderRef}`;
+    return `${currentOrderRef}_${storeName}`;
 }
 
 async function renderCheckout(container) {
