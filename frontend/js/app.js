@@ -277,8 +277,13 @@ async function renderStoreShop(container, storeId) {
     State.activeStoreId = storeId;
     saveState();
     
-    State.products = await apiCall('GET_STORE', { eventId: storeId });
-    sessionStorage.setItem(`products_${storeId}`, JSON.stringify(State.products));
+    const cachedProducts = sessionStorage.getItem(`products_${storeId}`);
+    if (cachedProducts) {
+        State.products = JSON.parse(cachedProducts);
+    } else {
+        State.products = await apiCall('GET_STORE', { eventId: storeId });
+        sessionStorage.setItem(`products_${storeId}`, JSON.stringify(State.products));
+    }
     
     updateCartCount();
 
@@ -1644,3 +1649,29 @@ async function handlePaymentSubmit(e, orderId, name, email) {
     
     Router.navigate('success', { orderId: orderId, email: email, emailStatus: res.emailStatus });
 }
+
+
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        State.cart = JSON.parse(localStorage.getItem('cart')) || [];
+        updateCartCount();
+        
+        if (window.location.pathname.includes('/shop')) {
+            State.products.forEach(p => {
+                const btnContainer = document.getElementById(`btn-container-${p.id}`);
+                if (btnContainer) {
+                    const inCart = State.cart.find(c => c.id === p.id);
+                    btnContainer.innerHTML = inCart 
+                        ? `<div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded-lg border border-blue-100 dark:border-gray-600">
+                            <button onclick="updateQty('${p.id}', -1)" class="w-10 h-10 font-bold text-xl text-blue-600 dark:text-blue-400">-</button>
+                            <span class="w-8 text-center font-bold" id="qty-${p.id}">${inCart.qty}</span>
+                            <button onclick="updateQty('${p.id}', 1)" class="w-10 h-10 font-bold text-xl text-blue-600 dark:text-blue-400">+</button>
+                           </div>`
+                        : `<button onclick="updateQty('${p.id}', 1)" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">Add to Cart</button>`;
+                }
+            });
+            const totalEl = document.getElementById('bottomTotal');
+            if (totalEl) totalEl.innerText = `$${getCartTotal()}`;
+        }
+    }
+});
