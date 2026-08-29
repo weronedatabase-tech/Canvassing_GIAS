@@ -160,6 +160,10 @@ const Router = {
             const parts = path.split('/');
             params.id = parts[3];
             view = 'admin_manage_store';
+        } else if (path === '/payment') {
+            view = 'payment';
+            const qs = new URLSearchParams(window.location.search);
+            params = Object.fromEntries(qs.entries());
         } else if (path === '/success') {
             view = 'success';
             const qs = new URLSearchParams(window.location.search);
@@ -173,7 +177,7 @@ const Router = {
 async function renderView(view, params = {}) {
     const container = document.getElementById('app-container');
     document.getElementById('backBtn').classList.toggle('hidden', view === 'landing');
-    document.getElementById('headerCartIcon').classList.toggle('hidden', !['store_info', 'store_shop'].includes(view));
+    document.getElementById('headerCartIcon').classList.toggle('hidden', view !== 'store_shop');
     
     container.innerHTML = '';
     
@@ -240,6 +244,10 @@ async function renderStoreInfo(container, storeId) {
     const store = config.stores.find(s => s.id === storeId);
     if (!store) return Router.navigate('landing');
     
+    if (State.activeStoreId !== storeId) {
+        State.cart = [];
+        updateCartCount();
+    }
     State.activeStoreId = storeId;
     saveState();
     document.getElementById('appTitleDisplay').innerText = store.name;
@@ -263,6 +271,9 @@ async function renderStoreShop(container, storeId) {
     const store = config.stores.find(s => s.id === storeId);
     if (!store) return;
     
+    if (State.activeStoreId !== storeId) {
+        State.cart = [];
+    }
     State.activeStoreId = storeId;
     saveState();
     
@@ -397,15 +408,15 @@ async function renderCartPage(container) {
     
     container.innerHTML = `
         <div class="p-4 fade-in pb-24">
-            <h2 class="text-xl font-bold mb-4">Your Cart</h2>
+            <h2 class="text-xl font-bold mb-4 flex items-center gap-2"><i class="fas fa-shopping-bag"></i> Your Cart</h2>
             <div class="space-y-3">
                 ${State.cart.map(c => `
-                    <div class="flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded shadow">
-                        <div>
-                            <p class="font-bold">${escapeHTML(c.name)}</p>
+                    <div class="flex justify-between items-center bg-white dark:bg-gray-800 p-3 rounded shadow gap-3">
+                        <div class="flex-1 min-w-0">
+                            <p class="font-bold break-words">${escapeHTML(c.name)}</p>
                             <p class="text-sm text-gray-700 dark:text-gray-400">$${c.price.toFixed(2)} x ${c.qty} = <span class="font-bold text-gray-900 dark:text-white">$${(c.price * c.qty).toFixed(2)}</span></p>
                         </div>
-                        <div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded border border-blue-100 dark:border-gray-600">
+                        <div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded border border-blue-100 dark:border-gray-600 shrink-0">
                             <button onclick="updateQty('${c.id}', -1)" class="w-8 h-8 font-bold text-blue-600">-</button>
                             <span class="w-6 text-center text-sm font-bold">${c.qty}</span>
                             <button onclick="updateQty('${c.id}', 1)" class="w-8 h-8 font-bold text-blue-600">+</button>
@@ -1242,7 +1253,7 @@ function renderAdminSummary(orders, products, storeId) {
                     const price = (itemStats[name].revenue / itemStats[name].qty).toFixed(2);
                     return `
                     <tr class="border-b border-gray-200 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                        <td class="p-3 text-sm font-semibold text-gray-900 dark:text-gray-100">${name}</td>
+                        <td class="p-3 text-sm font-semibold text-gray-900 dark:text-gray-100 break-words max-w-[150px] sm:max-w-[300px] whitespace-normal">${name}</td>
                         <td class="p-3 text-sm text-gray-700 dark:text-gray-400 text-right">$${price}</td>
                         <td class="p-3 text-sm font-bold text-gray-900 dark:text-gray-100 text-right">${itemStats[name].qty}</td>
                         <td class="p-3 text-sm font-bold text-green-700 dark:text-green-400 text-right">$${itemStats[name].revenue.toFixed(2)}</td>
@@ -1266,7 +1277,7 @@ function renderAdminSummary(orders, products, storeId) {
         </div>
         <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800 mb-6">
             <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Top Selling Item</p>
-            <p class="text-lg font-bold text-gray-900 dark:text-gray-100">${topSelling.name} <span class="text-sm text-gray-500 dark:text-gray-400 font-normal ml-1">(${topSelling.qty} units)</span></p>
+            <p class="text-lg font-bold text-gray-900 dark:text-gray-100 break-words">${topSelling.name} <span class="text-sm text-gray-500 dark:text-gray-400 font-normal ml-1 whitespace-nowrap">(${topSelling.qty} units)</span></p>
         </div>
         
         <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-3">
@@ -1574,10 +1585,14 @@ async function renderPaymentPage(container, params) {
         <div class="p-4 fade-in pb-10">
             <h2 class="text-xl font-bold mb-4">Complete Payment</h2>
             
+            <div class="bg-blue-50 dark:bg-blue-900/30 p-3 mb-4 rounded border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-300">
+                <i class="fas fa-info-circle mr-1"></i> If you lose this page, the QR code can still be found in the Order Summary sent to your email. You can also WhatsApp the payment screenshot to <strong>${store.paynowNumber || 'the admin'}</strong>.
+            </div>
+            
             <form id="paymentForm" onsubmit="handlePaymentSubmit(event, '${escapeHTML(params.orderId)}', '${escapeHTML(params.name)}', '${escapeHTML(params.email)}')" class="space-y-4">
                 <div class="bg-white dark:bg-gray-800 border-2 border-purple-800 p-4 rounded shadow relative">
                     <h3 class="font-bold mb-2">Payment Details</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4"><span class="font-bold text-purple-700 dark:text-purple-400 text-base">PayNow</span> using the QR code below. Screenshot this page to save QR code</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4"><span class="font-bold text-purple-700 dark:text-purple-400 text-base">PayNow</span> using the QR code below.</p>
                     
                     <div class="flex items-center gap-4">
                         <canvas id="qrCanvas" class="w-32 h-32 bg-white p-1 rounded"></canvas>
