@@ -125,6 +125,10 @@ const Router = {
         else if (view === 'store_shop') path = `/store/${params.id}/shop`;
         else if (view === 'cart') path = '/cart';
         else if (view === 'checkout') path = '/checkout';
+        else if (view === 'payment') {
+            const qs = new URLSearchParams(params).toString();
+            path = `/payment?${qs}`;
+        }
         else if (view === 'admin_login') path = '/admin/login';
         else if (view === 'admin_dashboard') path = '/admin/dashboard';
         else if (view === 'admin_manage_store') path = `/admin/store/${params.id}`;
@@ -178,6 +182,7 @@ async function renderView(view, params = {}) {
     else if (view === 'store_shop') await renderStoreShop(container, params.id);
     else if (view === 'cart') await renderCartPage(container);
     else if (view === 'checkout') await renderCheckout(container);
+    else if (view === 'payment') await renderPaymentPage(container, params);
     else if (view === 'success') await renderSuccess(container, params);
     else if (view === 'admin_login') renderAdminLogin(container);
     else if (view === 'admin_dashboard') await renderAdminDashboard(container);
@@ -492,7 +497,7 @@ async function renderCheckout(container) {
                     <h3 class="font-bold mb-3 border-b pb-2 dark:border-gray-700">1. Your Details</h3>
                     <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Full Name</label><input type="text" id="custName" required class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
                     <div class="grid grid-cols-2 gap-3 mt-3">
-                        <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">WhatsApp No.</label><input type="tel" id="custPhone" oninput="checkPhoneForPayment(this.value)" required pattern="^[89][0-9]{7}$" placeholder="8 digits" class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
+                        <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">WhatsApp No.</label><input type="tel" id="custPhone" required pattern="^[89][0-9]{7}$" placeholder="8 digits" class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
                         <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Email</label><input type="email" id="custEmail" required class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
                     </div>
                     <div class="mt-3">
@@ -511,31 +516,10 @@ async function renderCheckout(container) {
                     </div>
                 </div>
 
-                <div id="paymentSection" class="hidden bg-white dark:bg-gray-800 border-2 border-purple-800 p-4 rounded shadow relative">
-                    <h3 class="font-bold mb-2">2. Payment</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4"><span class="font-bold text-purple-700 dark:text-purple-400 text-base">PayNow</span> using the QR code below. Screenshot this page to save QR code</p>
-                    
-                    <div class="flex items-center gap-4">
-                        <canvas id="qrCanvas" class="w-32 h-32 bg-white p-1 rounded"></canvas>
-                        <div>
-                            <p class="text-sm">Pay: <span class="text-xl font-bold text-purple-700 dark:text-purple-400">$${getCartTotal()}</span></p>
-                            <p class="text-sm">To: <span class="font-mono font-bold">${store.paynowNumber || 'Not Set'}</span></p>
-                            <p class="text-xs bg-purple-100 dark:bg-purple-900 px-2 py-1 rounded mt-1">Ref: <span id="qrRefDisplay" class="font-mono font-bold">${escapeHTML(finalOrderId)}</span></p>
-                        </div>
-                    </div>
-                    
-                    <div class="mt-4">
-                        <label class="block text-sm font-extrabold text-blue-700 dark:text-blue-400 uppercase mb-1">Upload Successful Payment Screenshot</label>
-                        <input type="file" id="paymentProof" accept="image/*" required class="w-full text-sm">
-                    </div>
-                </div>
-                
-                <button type="submit" id="submitOrderBtn" class="hidden w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg">Confirm & Submit</button>
+                <button type="submit" id="submitOrderBtn" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg">Place Order & Proceed to Payment</button>
             </form>
         </div>
     `;
-
-    renderQR(store.paynowNumber, getCartTotal(), finalOrderId);
 }
 
 function handleCustTypeChange() {
@@ -559,18 +543,7 @@ function handleCustTypeChange() {
     }
 }
 
-function checkPhoneForPayment(phone) {
-    const paymentSection = document.getElementById('paymentSection');
-    const submitBtn = document.getElementById('submitOrderBtn');
-    
-    if (/^[89]\d{7}$/.test(phone)) {
-        paymentSection.classList.remove('hidden');
-        submitBtn.classList.remove('hidden');
-    } else {
-        paymentSection.classList.add('hidden');
-        submitBtn.classList.add('hidden');
-    }
-}
+
 
 function renderQR(phone, amount, ref) {
     if(!phone) return;
@@ -599,14 +572,7 @@ async function handleOrderSubmit(e) {
     const email = document.getElementById('custEmail').value;
     const custType = document.getElementById('custType').value;
     const custRelationName = document.getElementById('custRelationName').value;
-    const fileInput = document.getElementById('paymentProof');
     
-    let paymentProofBase64 = null, mimeType = null;
-    if(fileInput.files.length > 0) {
-        paymentProofBase64 = await compressImage(fileInput.files[0], 1000);
-        mimeType = 'image/jpeg';
-    }
-
     const store = State.masterConfig.stores.find(s => s.id === State.activeStoreId);
     const finalOrderId = getCheckoutOrderId(store.name);
 
@@ -615,20 +581,18 @@ async function handleOrderSubmit(e) {
         customerName: name, contact: phone, email: email,
         custType: custType, custRelationName: custRelationName,
         cart: State.cart, totalAmount: parseFloat(getCartTotal()),
-        paymentProofBase64, mimeType
+        paymentProofBase64: null, mimeType: null
     };
 
     const res = await apiCall('SUBMIT_ORDER', { eventId: State.activeStoreId, order: payload });
+    
+    // Do not clear cart yet in case they press back? Actually, we can clear it because the order is placed.
+    const cartTotal = getCartTotal();
     State.cart = [];
     updateCartCount();
-    sessionStorage.removeItem('currentOrderRef');
     saveState();
     
-    if (res.emailStatus && res.emailStatus.startsWith("Failed")) {
-        customAlert("Order submitted, but failed to send confirmation email: " + res.emailStatus);
-    }
-    
-    Router.navigate('success', { orderId: res.orderId, email: email, emailStatus: res.emailStatus });
+    Router.navigate('payment', { orderId: res.orderId, email: email, amount: cartTotal, name: name });
 }
 
 async function renderSuccess(container, params) {
@@ -1600,4 +1564,68 @@ async function adminOpenVendorFolder(eventId) {
         console.error(e);
         customAlert('Failed to open folder.');
     }
+}
+
+
+async function renderPaymentPage(container, params) {
+    const store = State.masterConfig.stores.find(s => s.id === State.activeStoreId);
+    
+    container.innerHTML = `
+        <div class="p-4 fade-in pb-10">
+            <h2 class="text-xl font-bold mb-4">Complete Payment</h2>
+            
+            <form id="paymentForm" onsubmit="handlePaymentSubmit(event, '${escapeHTML(params.orderId)}', '${escapeHTML(params.name)}', '${escapeHTML(params.email)}')" class="space-y-4">
+                <div class="bg-white dark:bg-gray-800 border-2 border-purple-800 p-4 rounded shadow relative">
+                    <h3 class="font-bold mb-2">Payment Details</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4"><span class="font-bold text-purple-700 dark:text-purple-400 text-base">PayNow</span> using the QR code below. Screenshot this page to save QR code</p>
+                    
+                    <div class="flex items-center gap-4">
+                        <canvas id="qrCanvas" class="w-32 h-32 bg-white p-1 rounded"></canvas>
+                        <div>
+                            <p class="text-sm">Pay: <span class="text-xl font-bold text-purple-700 dark:text-purple-400">$${params.amount}</span></p>
+                            <p class="text-sm">To: <span class="font-mono font-bold">${store.paynowNumber || 'Not Set'}</span></p>
+                            <p class="text-xs bg-purple-100 dark:bg-purple-900 px-2 py-1 rounded mt-1">Ref: <span id="qrRefDisplay" class="font-mono font-bold">${escapeHTML(params.orderId)}</span></p>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <label class="block text-sm font-extrabold text-blue-700 dark:text-blue-400 uppercase mb-1">Upload Successful Payment Screenshot</label>
+                        <input type="file" id="paymentProof" accept="image/*" required class="w-full text-sm">
+                    </div>
+                </div>
+                
+                <button type="submit" id="submitPaymentBtn" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg">Submit Payment Proof</button>
+            </form>
+        </div>
+    `;
+
+    renderQR(store.paynowNumber, params.amount, params.orderId);
+}
+
+async function handlePaymentSubmit(e, orderId, name, email) {
+    e.preventDefault();
+    const fileInput = document.getElementById('paymentProof');
+    
+    let paymentProofBase64 = null, mimeType = null;
+    if(fileInput.files.length > 0) {
+        paymentProofBase64 = await compressImage(fileInput.files[0], 1000);
+        mimeType = 'image/jpeg';
+    }
+
+    const res = await apiCall('UPDATE_ORDER_PROOF', { 
+        eventId: State.activeStoreId, 
+        orderId: orderId,
+        customerName: name,
+        email: email,
+        paymentProofBase64, 
+        mimeType 
+    });
+    
+    sessionStorage.removeItem('currentOrderRef');
+    
+    if (res.emailStatus && res.emailStatus.startsWith("Failed")) {
+        customAlert("Payment submitted, but failed to send confirmation email: " + res.emailStatus);
+    }
+    
+    Router.navigate('success', { orderId: orderId, email: email, emailStatus: res.emailStatus });
 }
