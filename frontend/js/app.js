@@ -195,6 +195,19 @@ async function renderView(view, params = {}) {
 
 // ---- VIEWS ----
 
+
+function isStoreOpen(store) {
+    if (!store.isOpen) return false;
+    if (store.closingDate) {
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+        const closeStr = store.closingDate.substring(0, 10);
+        if (todayStr > closeStr) return false;
+    }
+    return true;
+}
+
 async function loadMasterConfig(force = false) {
     if (!State.masterConfig || force) {
         State.masterConfig = await apiCall('INIT');
@@ -210,15 +223,7 @@ async function renderLanding(container) {
     const today = new Date();
     today.setHours(0,0,0,0);
     
-    const openStores = config.stores.filter(s => {
-        if (!s.isOpen) return false;
-        if (s.closingDate) {
-            const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-            const closeStr = s.closingDate.substring(0, 10);
-            if (todayStr > closeStr) return false;
-        }
-        return true;
-    });
+    const openStores = config.stores.filter(s => isStoreOpen(s));
 
     let html = `<div class="p-3 fade-in">
         <h2 class="text-2xl font-display font-semibold mb-4 tracking-tight">Active Fundraisers</h2>
@@ -252,14 +257,22 @@ async function renderStoreInfo(container, storeId) {
     saveState();
     document.getElementById('appTitleDisplay').innerText = store.name;
     
+    const actuallyOpen = isStoreOpen(store);
+    
     container.innerHTML = `
         <div class="fade-in pb-8">
             ${store.bannerImageId ? `<img src="https://lh3.googleusercontent.com/d/${store.bannerImageId}" class="w-full h-48 md:h-64 object-cover shadow-sm">` : ''}
             <div class="p-4 max-w-xl mx-auto -mt-8 relative z-10">
                 <div class="bg-white dark:bg-[#111] p-5 rounded-2xl shadow-sm border border-gray-400 dark:border-gray-800">
-                    <button onclick="Router.navigate('store_shop', {id: '${storeId}'})" class="w-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 py-3 rounded-xl font-bold hover:shadow-lg transition-transform active:scale-95 text-lg mb-6 tracking-tight">Start Shopping</button>
+                    ${actuallyOpen 
+                        ? `<button onclick="Router.navigate('store_shop', {id: '${storeId}'})" class="w-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 py-3 rounded-xl font-bold hover:shadow-lg transition-transform active:scale-95 text-lg mb-6 tracking-tight">Start Shopping</button>`
+                        : `<button disabled class="w-full bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300 py-3 rounded-xl font-bold text-lg mb-6 tracking-tight cursor-not-allowed">Fund Raising has Ended. Thanks For Supporting!</button>`
+                    }
                     <div class="prose dark:prose-invert prose-p:text-gray-600 dark:prose-p:text-gray-400 max-w-none text-sm leading-relaxed mb-6">${store.infoHtml}</div>
-                    <button onclick="Router.navigate('store_shop', {id: '${storeId}'})" class="w-full bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white py-3 rounded-xl font-bold hover:shadow-md transition-transform active:scale-95 text-lg">Start Shopping</button>
+                    ${actuallyOpen 
+                        ? `<button onclick="Router.navigate('store_shop', {id: '${storeId}'})" class="w-full bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white py-3 rounded-xl font-bold hover:shadow-md transition-transform active:scale-95 text-lg">Start Shopping</button>`
+                        : `<button disabled class="w-full bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300 py-3 rounded-xl font-bold text-lg cursor-not-allowed">Fund Raising has Ended. Thanks For Supporting!</button>`
+                    }
                 </div>
             </div>
         </div>
@@ -270,6 +283,11 @@ async function renderStoreShop(container, storeId) {
     const config = await loadMasterConfig();
     const store = config.stores.find(s => s.id === storeId);
     if (!store) return;
+    
+    if (!isStoreOpen(store)) {
+        customAlert("This fundraising event has ended.");
+        return Router.navigate('store_info', {id: storeId});
+    }
     
     if (State.activeStoreId !== storeId) {
         State.cart = [];
