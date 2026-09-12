@@ -52,6 +52,9 @@ function doPost(e) {
       case 'ADMIN_UPDATE_ORDER_PAYMENT':
         data = updateOrderPaymentStatus(req.eventId, req.orderId, req.isConfirmed, req.sendEmail);
         break;
+      case 'ADMIN_UPDATE_RECEIPT':
+        data = adminUpdateReceipt(req.eventId, req.orderId, req.customerName, req.paymentProofBase64, req.mimeType, req.remove);
+        break;
       case 'ADMIN_EDIT_ORDER': 
         data = editOrder(req.eventId, req.orderId, req.updatedData); 
         break;
@@ -756,6 +759,45 @@ function getOrCreateVendorFolder(eventId) {
 function getVendorFolderUrl(eventId) {
   const folder = getOrCreateVendorFolder(eventId);
   return { folderUrl: folder.getUrl() };
+}
+
+function adminUpdateReceipt(eventId, orderId, customerName, paymentProofBase64, mimeType, remove) {
+  const config = getMasterConfig();
+  const store = config.stores.find(s => s.id === eventId);
+  if (!store) throw new Error("Store not found");
+
+  let imageUrl = "No Image";
+  if (!remove && paymentProofBase64) {
+    const folder = DriveApp.getFolderById(eventId);
+    const blob = Utilities.newBlob(Utilities.base64Decode((paymentProofBase64.includes(',') ? paymentProofBase64.split(',')[1] : paymentProofBase64)), mimeType, `Payment_${customerName}_${Date.now()}`);
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    imageUrl = file.getUrl();
+  } else if (!remove) {
+    throw new Error("No image provided");
+  }
+
+  const sheetId = getSheetIdForEvent(eventId);
+  const ss = SpreadsheetApp.openById(sheetId);
+  const sheet = ss.getSheets()[0];
+  const data = sheet.getDataRange().getValues();
+
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    // Find all rows matching orderId and update Image URL (col 10)
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(orderId).trim()) {
+        sheet.getRange(i + 1, 10).setValue(imageUrl);
+      }
+    }
+  } catch (e) {
+    throw new Error("Could not acquire lock to update receipt.");
+  } finally {
+    lock.releaseLock();
+  }
+
+  return { success: true, imageUrl: imageUrl };
 }
 
 function exportVendorOrder(eventId, eventName, itemStats) {

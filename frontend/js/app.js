@@ -1215,11 +1215,23 @@ function renderOrderList(orders, storeId) {
                         <span class="text-green-500">Collected</span>
                     </label>
                 </div>
-                <div class="flex items-center gap-4">
-                    ${o.imageUrl && o.imageUrl !== 'No Image' ? `<a href="${escapeHTML(o.imageUrl)}" target="_blank" class="text-xs text-blue-500 hover:text-blue-600 font-bold">View Receipt</a>` : ''}
-                    <button onclick="adminResendEmail('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-blue-500 transition-colors" title="Resend Email"><i class="fas fa-envelope text-sm"></i></button>
-                    <button onclick="adminEditOrderModal('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-blue-500 transition-colors" title="Edit Order"><i class="fas fa-edit text-sm"></i></button>
-                    <button onclick="adminDeleteOrder('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-red-500 transition-colors" title="Delete Order"><i class="fas fa-trash text-sm"></i></button>
+                <div class="flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        ${o.imageUrl && o.imageUrl !== 'No Image' ? `
+                            <a href="${escapeHTML(o.imageUrl)}" target="_blank" class="text-xs text-blue-500 hover:text-blue-600 font-bold" title="View Receipt"><i class="fas fa-file-invoice"></i> View</a>
+                            <button onclick="adminDeleteReceipt('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-xs text-red-500 hover:text-red-600 font-bold" title="Delete Receipt"><i class="fas fa-trash-alt"></i></button>
+                            <button onclick="document.getElementById('admin-receipt-${escapeHTML(o.orderId)}').click()" class="text-xs text-blue-500 hover:text-blue-600 font-bold" title="Replace Receipt"><i class="fas fa-upload"></i> Replace</button>
+                        ` : `
+                            <span class="text-xs text-gray-500 italic"><i class="fas fa-times-circle mr-1"></i>No Receipt</span>
+                            <button onclick="document.getElementById('admin-receipt-${escapeHTML(o.orderId)}').click()" class="text-xs text-blue-500 hover:text-blue-600 font-bold" title="Upload Receipt"><i class="fas fa-upload"></i> Upload</button>
+                        `}
+                        <input type="file" id="admin-receipt-${escapeHTML(o.orderId)}" class="hidden" accept="image/*" onchange="handleAdminReceiptUpload(event, '${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', '${escapeHTML(o.customer).replace(/'/g, "\\'")}')">
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="adminResendEmail('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-blue-500 transition-colors" title="Resend Email"><i class="fas fa-envelope text-sm"></i></button>
+                        <button onclick="adminEditOrderModal('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-blue-500 transition-colors" title="Edit Order"><i class="fas fa-edit text-sm"></i></button>
+                        <button onclick="adminDeleteOrder('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-red-500 transition-colors" title="Delete Order"><i class="fas fa-trash text-sm"></i></button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1350,6 +1362,72 @@ function paymentConfirmPrompt() {
         document.getElementById('pc-no-send').onclick = () => { div.remove(); resolve({ confirm: true, sendEmail: false }); };
         document.getElementById('pc-cancel').onclick = () => { div.remove(); resolve({ confirm: false }); };
     });
+}
+
+async function handleAdminReceiptUpload(event, eventId, orderId, customerName) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    if (file.size > 5 * 1024 * 1024) {
+        alert("Image too large. Max 5MB.");
+        return;
+    }
+    
+    showLoading(true, "Uploading receipt...");
+    try {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            try {
+                const base64 = reader.result;
+                const mimeType = file.type;
+                const res = await apiCall('ADMIN_UPDATE_RECEIPT', { 
+                    eventId, 
+                    orderId, 
+                    customerName, 
+                    paymentProofBase64: base64, 
+                    mimeType,
+                    remove: false
+                });
+                
+                const idx = State.ordersCache.findIndex(o => o.orderId === orderId);
+                if(idx > -1) State.ordersCache[idx].imageUrl = res.imageUrl;
+                
+                document.getElementById('ordersList').innerHTML = renderOrderList(State.ordersCache, eventId);
+                filterAdminOrders();
+            } catch(e) {
+                alert(e.message);
+            } finally {
+                showLoading(false);
+            }
+        };
+        reader.readAsDataURL(file);
+    } catch (e) {
+        alert(e.message);
+        showLoading(false);
+    }
+}
+
+async function adminDeleteReceipt(eventId, orderId) {
+    if (!await customConfirm("Are you sure you want to delete the receipt for this order?")) return;
+    
+    showLoading(true, "Deleting receipt...");
+    try {
+        await apiCall('ADMIN_UPDATE_RECEIPT', { 
+            eventId, 
+            orderId, 
+            remove: true 
+        });
+        
+        const idx = State.ordersCache.findIndex(o => o.orderId === orderId);
+        if(idx > -1) State.ordersCache[idx].imageUrl = "No Image";
+        
+        document.getElementById('ordersList').innerHTML = renderOrderList(State.ordersCache, eventId);
+        filterAdminOrders();
+    } catch(e) {
+        alert(e.message);
+    } finally {
+        showLoading(false);
+    }
 }
 
 async function updateOrdPaymentStatus(eventId, orderId, isConfirmed, checkboxElem) {
