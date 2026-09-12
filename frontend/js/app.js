@@ -176,9 +176,22 @@ const Router = {
 
 async function renderView(view, params = {}) {
     const container = document.getElementById('app-container');
+    const headerContainer = document.getElementById('header-container');
     document.getElementById('backBtn').classList.toggle('hidden', view === 'landing');
     document.getElementById('headerCartIcon').classList.toggle('hidden', view !== 'store_shop');
     
+    if (view.startsWith('admin_')) {
+        container.classList.remove('max-w-lg');
+        container.classList.add('w-full', 'max-w-[1600px]');
+        headerContainer.classList.remove('max-w-lg');
+        headerContainer.classList.add('w-full', 'max-w-[1600px]');
+    } else {
+        container.classList.add('max-w-lg');
+        container.classList.remove('w-full', 'max-w-[1600px]', 'max-w-7xl');
+        headerContainer.classList.add('max-w-lg');
+        headerContainer.classList.remove('w-full', 'max-w-[1600px]', 'max-w-7xl');
+    }
+
     container.innerHTML = '';
     
     if (view === 'landing') await renderLanding(container);
@@ -754,8 +767,8 @@ async function renderAdminDashboard(container, forceRefresh = false) {
     const config = await loadMasterConfig(forceRefresh);
     
     container.innerHTML = `
-        <div class="p-3 md:p-4 fade-in pb-16">
-            <div class="flex justify-between items-center mb-5">
+        <div class="p-0 sm:p-4 fade-in pb-16">
+            <div class="flex justify-between items-center mb-5 px-3 sm:px-0 pt-3 sm:pt-0">
                 <h2 class="text-2xl font-display font-bold">Dashboard</h2>
                 <div class="flex gap-3 text-sm font-semibold">
                     <button onclick="renderAdminDashboard(document.getElementById('app-container'), true)" class="text-blue-600 hover:text-blue-700"><i class="fas fa-sync mr-1"></i> Refresh</button>
@@ -763,7 +776,7 @@ async function renderAdminDashboard(container, forceRefresh = false) {
                 </div>
             </div>
             
-            <div class="mb-5 bg-white dark:bg-[#111] p-4 md:p-5 rounded-2xl shadow-sm border border-gray-400 dark:border-gray-800">
+            <div class="mb-5 bg-white dark:bg-[#111] p-3 sm:p-5 sm:rounded-2xl shadow-sm border-y sm:border border-gray-400 dark:border-gray-800">
                 <h3 class="font-bold mb-4 flex items-center justify-between text-lg">
                     Stores
                     <button onclick="createNewStorePrompt()" class="bg-gray-900 text-white dark:bg-white dark:text-gray-900 px-4 py-1.5 rounded-lg text-sm font-semibold transition-transform active:scale-95"><i class="fas fa-plus mr-1"></i> New</button>
@@ -886,8 +899,8 @@ async function manageStore(storeId, initialTab = 'info') {
     sessionStorage.setItem(`products_${storeId}`, JSON.stringify(products));
 
     area.innerHTML = `
-        <div class="p-3 md:p-4 fade-in pb-16">
-            <div class="flex items-center justify-between mb-5">
+        <div class="p-0 sm:p-4 fade-in pb-16">
+            <div class="flex items-center justify-between mb-5 px-3 sm:px-0 pt-3 sm:pt-0">
                 <div class="flex items-center gap-3">
                     <button onclick="Router.navigate('admin_dashboard')" class="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
                         <i class="fas fa-arrow-left text-lg"></i>
@@ -895,7 +908,7 @@ async function manageStore(storeId, initialTab = 'info') {
                     <h2 class="text-xl md:text-2xl font-display font-bold text-gray-900 dark:text-gray-100">Managing: ${config.name}</h2>
                 </div>
             </div>
-            <div class="bg-white dark:bg-[#111] p-4 md:p-5 rounded-2xl shadow-sm border border-gray-400 dark:border-gray-800 mb-6">
+            <div class="bg-white dark:bg-[#111] p-3 sm:p-5 sm:rounded-2xl shadow-sm border-y sm:border border-gray-400 dark:border-gray-800 mb-6">
                 <!-- TABS -->
                 <div class="flex overflow-x-auto border-b border-gray-400 dark:border-gray-800 mb-4 text-sm font-semibold hide-scrollbar">
                     <button onclick="switchAdminTab('info')" id="tab-info" class="shrink-0 px-4 py-2 text-gray-900 dark:text-white border-b-2 border-gray-900 dark:border-white transition-colors">Info & Settings</button>
@@ -1358,7 +1371,7 @@ function renderAdminSummary(orders, products, storeId) {
                     const price = (itemStats[name].revenue / itemStats[name].qty).toFixed(2);
                     return `
                     <tr class="border-b border-gray-200 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                        <td class="p-3 text-sm font-semibold text-gray-900 dark:text-gray-100 break-words max-w-[150px] sm:max-w-[300px] whitespace-normal">${name}</td>
+                        <td class="p-3 text-sm font-semibold text-gray-900 dark:text-gray-100 break-words break-all whitespace-normal">${name}</td>
                         <td class="p-3 text-sm text-gray-700 dark:text-gray-400 text-right">$${price}</td>
                         <td class="p-3 text-sm font-bold text-gray-900 dark:text-gray-100 text-right">${itemStats[name].qty}</td>
                         <td class="p-3 text-sm font-bold text-green-700 dark:text-green-400 text-right">$${itemStats[name].revenue.toFixed(2)}</td>
@@ -1390,14 +1403,16 @@ function renderAdminSummary(orders, products, storeId) {
         </div>
         
         <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-3">
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
                 <h4 class="font-bold text-sm text-gray-900 dark:text-gray-100">Item Breakdown</h4>
-                <button id="exportVendorBtn" onclick="adminExportVendorOrder('${storeId}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors flex items-center gap-1.5"><i class="fas fa-file-export"></i> Export</button>
-                <a id="viewExportLink" href="#" target="_blank" class="hidden text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1"><i class="fas fa-external-link-alt"></i> View Sheet</a>
+                <div class="flex items-center gap-2">
+                    <button id="exportVendorBtn" onclick="adminExportVendorOrder('${storeId}')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors flex items-center gap-1.5"><i class="fas fa-file-export"></i> Export</button>
+                    <a id="viewExportLink" href="#" target="_blank" class="hidden text-xs text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1"><i class="fas fa-external-link-alt"></i> View Sheet</a>
+                </div>
             </div>
-            <button onclick="adminOpenVendorFolder('${storeId}')" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors flex items-center gap-1.5"><i class="fas fa-folder-open"></i> Open Vendor Folder</button>
+            <button onclick="adminOpenVendorFolder('${storeId}')" class="w-full sm:w-auto bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 text-xs font-bold py-1.5 px-3 rounded-lg shadow-sm transition-colors flex justify-center items-center gap-1.5"><i class="fas fa-folder-open"></i> Open Vendor Folder</button>
         </div>
-        <div class="bg-white dark:bg-[#111] rounded-xl border border-gray-400 dark:border-gray-800 overflow-hidden">
+        <div class="bg-white dark:bg-[#111] rounded-xl border border-gray-400 dark:border-gray-800 overflow-x-auto">
             ${breakdownHtml}
         </div>
     `;
