@@ -1609,7 +1609,7 @@ async function renderPaymentPage(container, params) {
             <h2 class="text-xl font-bold mb-4">Complete Payment</h2>
             
             <div class="bg-blue-50 dark:bg-blue-900/30 p-3 mb-4 rounded border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-300">
-                <i class="fas fa-info-circle mr-1"></i> If you lose this page, the QR code can still be found in the Order Summary sent to your email. You can also WhatsApp the payment screenshot to <strong>${store.paynowNumber || 'the admin'}</strong>.
+                <i class="fas fa-info-circle mr-1"></i> Please make your payment using the QR code below and upload the screenshot here. You will receive an email confirmation once the screenshot is uploaded. If you lose this page, you can also WhatsApp the payment screenshot to <strong>${store.paynowNumber || 'the admin'}</strong>.
             </div>
             
             <form id="paymentForm" onsubmit="handlePaymentSubmit(event, '${escapeHTML(params.orderId)}', '${escapeHTML(params.name)}', '${escapeHTML(params.email)}')" class="space-y-4">

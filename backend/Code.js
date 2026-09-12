@@ -433,14 +433,12 @@ function submitOrder(eventId, data) {
   }
 
   let emailStatus = "Not Sent";
-  if (data.email && data.email.includes('@')) {
-    emailStatus = _sendOrderEmail(data.email, orderId, data.customerName, data.cart, data.totalAmount, store, false);
-  }
+  // No emails sent at this stage
 
   return { orderId: orderId, emailStatus: emailStatus };
 }
 
-function _sendOrderEmail(email, orderId, customerName, cart, totalAmount, store, isUpdate = false) {
+function _sendOrderEmail(email, orderId, customerName, cart, totalAmount, store, emailType = 'PROCESSING') {
   try {
     const itemListHtml = cart.map(i => 
       `<tr>
@@ -451,8 +449,17 @@ function _sendOrderEmail(email, orderId, customerName, cart, totalAmount, store,
        </tr>`
     ).join('');
 
-    const titleText = isUpdate ? "Updated Order Processing" : "Order Processing";
-    const customIntro = store.emailIntro ? store.emailIntro.replace(/\n/g, '<br>') : `Hi ${customerName},<br>Thank you for your support!`;
+    let titleText = "Order Processing";
+    let customIntro = `Hi ${customerName},<br>Thank you for your support. Your order and payment are being processed. If you experience any trouble with placing your order / making payment, please contact us.`;
+    
+    if (emailType === 'CONFIRMED') {
+      titleText = "Payment Confirmed";
+      customIntro = `Hi ${customerName},<br>Payment has been confirmed. Thank you for your support!`;
+    } else if (emailType === 'UPDATE') {
+      titleText = "Updated Order Processing";
+      customIntro = store.emailIntro ? store.emailIntro.replace(/\n/g, '<br>') : `Hi ${customerName},<br>Your order has been updated.`;
+    }
+
     const customFooter = store.emailFooter ? store.emailFooter.replace(/\n/g, '<br>') : `Thank you.`;
 
     const htmlBody = `
@@ -480,25 +487,6 @@ function _sendOrderEmail(email, orderId, customerName, cart, totalAmount, store,
           </tfoot>
         </table>
 
-        ${store.paynowNumber && !isUpdate ? 
-            `<div style="text-align: center; margin-bottom: 20px; background: #f9fafb; padding: 20px; border-radius: 8px; border: 2px dashed #ccc;">
-                <p style="font-size: 13px; font-weight: bold; color: #b91c1c; text-transform: uppercase; margin-top: 0; line-height: 1.4;">
-                  IF YOU HAVE ALREADY MADE PAYMENT AND SUBMITTED THE SCREENSHOT VIA THE ONLINE STORE. IGNORE THE QR CODE BELOW.
-                </p>
-                <p style="font-size: 13px; font-weight: bold; color: #047857; text-transform: uppercase; margin-bottom: 20px; line-height: 1.4;">
-                  BUT IF NOT MADE PAYMENT YET USE THE QR CODE BELOW AND FOLLOW THE INSTRUCTIONS:
-                </p>
-                
-                <h3 style="margin-top: 0; color: #6b21a8;">Complete Your Payment</h3>
-                <p style="margin: 5px 0; font-size: 14px; color: #555;">Scan the QR code below to pay <strong>$${parseFloat(totalAmount).toFixed(2)}</strong></p>
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(generatePayNowString(store.paynowNumber, totalAmount, orderId))}" alt="PayNow QR Code" style="width: 200px; height: 200px; margin: 10px 0;" />
-                <p style="margin: 5px 0; font-size: 14px;"><strong>Pay To:</strong> ${store.paynowNumber}</p>
-                <p style="margin: 5px 0; font-size: 14px;"><strong>Reference:</strong> ${orderId}</p>
-                <p style="margin: 15px 0 5px 0; font-size: 14px; color: #b91c1c; font-weight: bold;">Important:</p>
-                <p style="margin: 5px 0; font-size: 14px; color: #333;">After paying, please WhatsApp your successful payment screenshot to <strong>${store.paynowNumber}</strong>.</p>
-            </div>` 
-          : ''}
-          
         <p style="font-size: 12px; color: #666; margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">${customFooter}</p>
       </div>
     `;
@@ -653,7 +641,7 @@ function editOrder(eventId, orderId, updatedData) {
   if (email && email.includes('@')) {
     const config = getMasterConfig();
     const store = config.stores.find(s => s.id === eventId);
-    emailStatus = _sendOrderEmail(email, orderId, updatedData.customer, items, updatedData.total, store, true);
+    emailStatus = _sendOrderEmail(email, orderId, updatedData.customer, items, updatedData.total, store, 'UPDATE');
   }
   
   return { success: true, emailStatus: emailStatus };
@@ -703,7 +691,7 @@ function resendOrderEmail(eventId, orderId) {
   const config = getMasterConfig();
   const store = config.stores.find(s => s.id === eventId);
   
-  const emailStatus = _sendOrderEmail(email, orderId, customerName, items, totalAmount, store, false);
+  const emailStatus = _sendOrderEmail(email, orderId, customerName, items, totalAmount, store, 'PROCESSING');
   return { emailStatus: emailStatus };
 }
 
@@ -714,18 +702,43 @@ function updateOrderPaymentStatus(eventId, orderId, isConfirmed) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) throw new Error("No orders found.");
   
-  const range = sheet.getRange(2, 1, lastRow - 1, 1);
-  const ids = range.getValues().flat();
+  const range = sheet.getRange(2, 1, lastRow - 1, 14);
+  const data = range.getValues();
   
   let found = false;
-  for (let i = 0; i < ids.length; i++) {
-    if (String(ids[i]).trim() === String(orderId).trim()) {
+  let emailStatus = "Not Sent";
+  for (let i = 0; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(orderId).trim()) {
       sheet.getRange(i + 2, 14).setValue(isConfirmed);
+      
+      if (!found && isConfirmed) {
+        const customerName = data[i][6];
+        const email = data[i][8];
+        
+        if (email && email.includes('@')) {
+          const config = getMasterConfig();
+          const store = config.stores.find(s => s.id === eventId);
+          
+          let cart = [];
+          let totalAmount = 0;
+          for (let j = 0; j < data.length; j++) {
+             if (String(data[j][0]).trim() === String(orderId).trim()) {
+                 cart.push({
+                     name: data[j][2],
+                     price: parseFloat(data[j][3]),
+                     qty: parseInt(data[j][4])
+                 });
+                 totalAmount += parseFloat(data[j][5]);
+             }
+          }
+          emailStatus = _sendOrderEmail(email, orderId, customerName, cart, totalAmount, store, 'CONFIRMED');
+        }
+      }
       found = true;
     }
   }
   if (!found) throw new Error("Order ID not found.");
-  return { success: true };
+  return { success: true, emailStatus: emailStatus };
 }
 
 function getOrCreateVendorFolder(eventId) {
@@ -828,7 +841,7 @@ function updateOrderProof(eventId, orderId, customerName, email, paymentProofBas
 
     let emailStatus = "Not Sent";
     if (email && email.includes('@')) {
-      emailStatus = _sendOrderEmail(email, orderId, customerName, cart, totalAmount, store, false);
+      emailStatus = _sendOrderEmail(email, orderId, customerName, cart, totalAmount, store, 'PROCESSING');
     }
     
     SpreadsheetApp.flush();
