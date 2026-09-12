@@ -225,7 +225,32 @@ async function renderLanding(container) {
     
     const openStores = config.stores.filter(s => isStoreOpen(s));
 
+    let pendingOrdersHtml = '';
+    const pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
+    if (pendingOrders.length > 0) {
+        pendingOrdersHtml = `
+            <div class="mb-6 space-y-3">
+                ${pendingOrders.map(p => {
+                    const store = config.stores.find(s => s.id === p.storeId);
+                    const storeName = store ? store.name : 'Unknown Store';
+                    return `
+                        <div class="bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700/60 p-4 rounded-xl shadow-sm cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors" onclick="Router.navigate('payment', { orderId: '${escapeHTML(p.orderId)}', email: '${escapeHTML(p.email)}', amount: ${p.amount}, name: '${escapeHTML(p.name)}' })">
+                            <div class="flex items-start justify-between gap-2">
+                                <div>
+                                    <h3 class="font-bold text-amber-900 dark:text-amber-300">Pending Payment: ${escapeHTML(storeName)}</h3>
+                                    <p class="text-sm text-amber-800 dark:text-amber-400 mt-1">You have an order (${escapeHTML(p.orderId)}) pending payment screenshot upload. Click here to upload.</p>
+                                </div>
+                                <i class="fas fa-chevron-right text-amber-600 dark:text-amber-500 mt-1"></i>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+
     let html = `<div class="p-3 fade-in">
+        ${pendingOrdersHtml}
         <h2 class="text-2xl font-display font-semibold mb-4 tracking-tight">Active Fundraisers</h2>
         <div class="grid gap-4">`;
         
@@ -259,10 +284,33 @@ async function renderStoreInfo(container, storeId) {
     
     const actuallyOpen = isStoreOpen(store);
     
+    let pendingOrdersHtml = '';
+    const pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
+    const storePendingOrders = pendingOrders.filter(p => p.storeId === storeId);
+    
+    if (storePendingOrders.length > 0) {
+        pendingOrdersHtml = `
+            <div class="mb-6 space-y-3">
+                ${storePendingOrders.map(p => `
+                    <div class="bg-amber-50 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700/60 p-4 rounded-xl shadow-sm cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors" onclick="Router.navigate('payment', { orderId: '${escapeHTML(p.orderId)}', email: '${escapeHTML(p.email)}', amount: ${p.amount}, name: '${escapeHTML(p.name)}' })">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <h3 class="font-bold text-amber-900 dark:text-amber-300">Pending Payment for this Store</h3>
+                                <p class="text-sm text-amber-800 dark:text-amber-400 mt-1">You have an order (${escapeHTML(p.orderId)}) pending payment screenshot upload. Click here to upload.</p>
+                            </div>
+                            <i class="fas fa-chevron-right text-amber-600 dark:text-amber-500 mt-1"></i>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+    
     container.innerHTML = `
         <div class="fade-in pb-8">
             ${store.bannerImageId ? `<img src="https://lh3.googleusercontent.com/d/${store.bannerImageId}" class="w-full h-48 md:h-64 object-cover shadow-sm">` : ''}
             <div class="p-4 max-w-xl mx-auto -mt-8 relative z-10">
+                ${pendingOrdersHtml}
                 <div class="bg-white dark:bg-[#111] p-5 rounded-2xl shadow-sm border border-gray-400 dark:border-gray-800">
                     ${actuallyOpen 
                         ? `<button onclick="Router.navigate('store_shop', {id: '${storeId}'})" class="w-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 py-3 rounded-xl font-bold hover:shadow-lg transition-transform active:scale-95 text-lg mb-6 tracking-tight">Start Shopping</button>`
@@ -620,8 +668,21 @@ async function handleOrderSubmit(e) {
 
     const res = await apiCall('SUBMIT_ORDER', { eventId: State.activeStoreId, order: payload });
     
-    // Do not clear cart yet in case they press back? Actually, we can clear it because the order is placed.
     const cartTotal = getCartTotal();
+    
+    let pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
+    pendingOrders = pendingOrders.filter(p => p.storeId !== State.activeStoreId); // Keep one pending order per store max
+    pendingOrders.push({
+        storeId: State.activeStoreId,
+        orderId: res.orderId,
+        email: email,
+        name: name,
+        amount: cartTotal,
+        cart: State.cart,
+        date: Date.now()
+    });
+    localStorage.setItem('pendingOrders', JSON.stringify(pendingOrders));
+    
     State.cart = [];
     updateCartCount();
     saveState();
@@ -1734,13 +1795,31 @@ async function adminOpenVendorFolder(eventId) {
 async function renderPaymentPage(container, params) {
     const store = State.masterConfig.stores.find(s => s.id === State.activeStoreId);
     
+    let pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
+    let po = pendingOrders.find(p => p.orderId === params.orderId);
+    
+    let summaryHtml = '';
+    if (po && po.cart && po.cart.length > 0) {
+        summaryHtml = `
+            <div class="bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 p-4 rounded mb-4">
+                <h3 class="font-bold mb-2 text-sm uppercase text-gray-700 dark:text-gray-300">Order Summary</h3>
+                <ul class="text-sm space-y-1 mb-2 text-gray-800 dark:text-gray-200">
+                    ${po.cart.map(i => `<li>${i.qty}x ${escapeHTML(i.name)}</li>`).join('')}
+                </ul>
+                <p class="font-bold text-gray-900 dark:text-white border-t border-gray-300 dark:border-gray-700 pt-2">Total: $${po.amount.toFixed(2)}</p>
+            </div>
+        `;
+    }
+
     container.innerHTML = `
         <div class="p-4 fade-in pb-10">
             <h2 class="text-xl font-bold mb-4">Complete Payment</h2>
             
             <div class="bg-blue-50 dark:bg-blue-900/30 p-3 mb-4 rounded border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-300">
-                <i class="fas fa-info-circle mr-1"></i> Please make your payment using the QR code below and upload the screenshot here. You will receive an email confirmation once the screenshot is uploaded. If you lose this page, you can also WhatsApp the payment screenshot to <strong>${store.paynowNumber || 'the admin'}</strong>.
+                <i class="fas fa-info-circle mr-1"></i> Please make your payment using the QR code below and upload the screenshot here. You will receive an email confirmation once the screenshot is uploaded. If you lose this page before uploading, open the fundraising link again to see a notification to bring you back to this page. Alternatively, you can also WhatsApp the payment screenshot to <strong>83282989</strong>.
             </div>
+            
+            ${summaryHtml}
             
             <form id="paymentForm" onsubmit="handlePaymentSubmit(event, '${escapeHTML(params.orderId)}', '${escapeHTML(params.name)}', '${escapeHTML(params.email)}')" class="space-y-4">
                 <div class="bg-white dark:bg-gray-800 border-2 border-purple-800 p-4 rounded shadow relative">
@@ -1763,11 +1842,36 @@ async function renderPaymentPage(container, params) {
                 </div>
                 
                 <button type="submit" id="submitPaymentBtn" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg">Submit Payment Proof</button>
+                <button type="button" onclick="cancelPendingOrder('${State.activeStoreId}', '${escapeHTML(params.orderId)}')" class="w-full mt-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 py-2 rounded-lg font-bold transition-colors">Cancel Order</button>
             </form>
         </div>
     `;
 
     renderQR(store.paynowNumber, params.amount, params.orderId);
+}
+
+async function cancelPendingOrder(eventId, orderId) {
+    if (!await customConfirm("Are you sure you want to cancel this order? This cannot be undone.")) return;
+    
+    showLoading(true, "Canceling order...");
+    try {
+        await apiCall('ADMIN_DELETE_ORDER', { eventId, orderId });
+        
+        let pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
+        pendingOrders = pendingOrders.filter(p => p.orderId !== orderId);
+        localStorage.setItem('pendingOrders', JSON.stringify(pendingOrders));
+        
+        // Go back to landing or store depending on what we know
+        if (State.activeStoreId === eventId) {
+            Router.navigate('store_shop', { id: eventId });
+        } else {
+            Router.navigate('landing');
+        }
+    } catch(e) {
+        alert(e.message);
+    } finally {
+        showLoading(false);
+    }
 }
 
 async function handlePaymentSubmit(e, orderId, name, email) {
@@ -1790,6 +1894,10 @@ async function handlePaymentSubmit(e, orderId, name, email) {
     });
     
     sessionStorage.removeItem('currentOrderRef');
+    
+    let pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
+    pendingOrders = pendingOrders.filter(p => p.orderId !== orderId);
+    localStorage.setItem('pendingOrders', JSON.stringify(pendingOrders));
     
     if (res.emailStatus && res.emailStatus.startsWith("Failed")) {
         customAlert("Payment submitted, but failed to send confirmation email: " + res.emailStatus);
