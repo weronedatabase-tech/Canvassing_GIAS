@@ -932,6 +932,8 @@ async function manageStore(storeId, initialTab = 'info') {
                         <option value="all">All</option>
                         <option value="not_collected">Not Collected</option>
                         <option value="collected">Collected</option>
+                        <option value="paid">Paid</option>
+                        <option value="unpaid">Unpaid</option>
                     </select>
                 </div>
                 <div id="ordersList" class="space-y-3 h-[calc(100vh-280px)] overflow-y-auto pr-1">
@@ -1180,7 +1182,7 @@ async function adminDeleteProduct(eventId, productId) {
 function renderOrderList(orders, storeId) {
     if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700 dark:text-gray-400">No orders.</p>';
     return orders.map(o => `
-        <div class="border p-3.5 sm:p-4 rounded-xl dark:border-gray-700 bg-gray-50 dark:bg-gray-900 order-card mb-3" data-id="${escapeHTML(o.orderId)}" data-search="${escapeHTML(o.customer).toLowerCase()} ${escapeHTML(o.contact)} ${escapeHTML(o.orderId).toLowerCase()}" data-status="${escapeHTML(o.status || 'Not Collected')}">
+        <div class="border p-3.5 sm:p-4 rounded-xl dark:border-gray-700 bg-gray-50 dark:bg-gray-900 order-card mb-3" data-id="${escapeHTML(o.orderId)}" data-search="${escapeHTML(o.customer).toLowerCase()} ${escapeHTML(o.contact)} ${escapeHTML(o.orderId).toLowerCase()}" data-status="${escapeHTML(o.status || 'Not Collected')}" data-payment="${o.paymentConfirmed ? 'paid' : 'unpaid'}">
             <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2.5 gap-2">
                 <div class="flex-1 min-w-0">
                     <p class="font-bold text-base text-gray-900 dark:text-gray-100 break-words">${escapeHTML(o.customer)}</p>
@@ -1194,7 +1196,7 @@ function renderOrderList(orders, storeId) {
                 <div class="flex sm:flex-col justify-between sm:justify-start items-center sm:items-end gap-2 pt-1 sm:pt-0 border-t sm:border-t-0 border-gray-200 dark:border-gray-800 sm:shrink-0">
                     <p class="font-bold text-blue-600 text-lg sm:text-xl">$${o.total.toFixed(2)}</p>
                     <label id="payment-badge-${escapeHTML(o.orderId)}" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm ${o.paymentConfirmed ? 'bg-emerald-100 text-emerald-900 border-emerald-400 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-600 ring-1 ring-emerald-400/30' : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60 dark:hover:bg-amber-950/60'}">
-                        <input type="checkbox" class="w-4 h-4 shrink-0 rounded text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer" ${o.paymentConfirmed ? 'checked' : ''} onchange="updateOrdPaymentStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', this.checked)">
+                        <input type="checkbox" class="w-4 h-4 shrink-0 rounded text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer" ${o.paymentConfirmed ? 'checked' : ''} onchange="updateOrdPaymentStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', this.checked, this)">
                         <span class="select-none font-bold">PAYMENT</span>
                     </label>
                 </div>
@@ -1230,10 +1232,13 @@ function filterAdminOrders() {
     document.querySelectorAll('.order-card').forEach(card => {
         const matchesSearch = card.getAttribute('data-search').includes(term);
         const status = card.getAttribute('data-status');
+        const payment = card.getAttribute('data-payment');
         
         let matchesFilter = true;
         if (filter === 'collected' && status !== 'Collected') matchesFilter = false;
         if (filter === 'not_collected' && status === 'Collected') matchesFilter = false;
+        if (filter === 'paid' && payment !== 'paid') matchesFilter = false;
+        if (filter === 'unpaid' && payment !== 'unpaid') matchesFilter = false;
 
         card.style.display = (matchesSearch && matchesFilter) ? 'block' : 'none';
     });
@@ -1243,10 +1248,14 @@ function renderAdminSummary(orders, products, storeId) {
     if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700 dark:text-gray-400">No orders yet.</p>';
     
     let totalRevenue = 0;
+    let totalPaymentMade = 0;
     const itemStats = {};
     
     orders.forEach(o => {
         totalRevenue += o.total;
+        if (o.paymentConfirmed) {
+            totalPaymentMade += o.total;
+        }
         o.items.forEach(item => {
             if (!itemStats[item.name]) itemStats[item.name] = { qty: 0, revenue: 0 };
             itemStats[item.name].qty += item.qty;
@@ -1290,11 +1299,15 @@ function renderAdminSummary(orders, products, storeId) {
     return `
         <div class="grid grid-cols-2 gap-4 mb-6">
             <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800">
-                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Total Revenue</p>
-                <p class="text-2xl font-bold text-green-600 dark:text-green-500">$${totalRevenue.toFixed(2)}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1 flex items-center justify-between">Expected Revenue <i class="fas fa-money-bill-wave"></i></p>
+                <p class="text-2xl font-bold text-gray-900 dark:text-gray-100">$${totalRevenue.toFixed(2)}</p>
             </div>
             <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800">
-                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Total Orders</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1 flex items-center justify-between">Payment Made <i class="fas fa-check-circle"></i></p>
+                <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-500">$${totalPaymentMade.toFixed(2)}</p>
+            </div>
+            <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800 col-span-2">
+                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1 flex items-center justify-between">Total Orders <i class="fas fa-shopping-bag"></i></p>
                 <p class="text-2xl font-bold text-blue-600 dark:text-blue-500">${orders.length}</p>
             </div>
         </div>
@@ -1317,7 +1330,41 @@ function renderAdminSummary(orders, products, storeId) {
     `;
 }
 
-async function updateOrdPaymentStatus(eventId, orderId, isConfirmed) {
+function paymentConfirmPrompt() {
+    return new Promise(resolve => {
+        const div = document.createElement('div');
+        div.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/60';
+        div.innerHTML = `
+            <div class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 border border-gray-200 dark:border-gray-800">
+                <h3 class="text-lg font-bold mb-3">Confirm Payment</h3>
+                <p class="text-sm text-gray-700 dark:text-gray-300 mb-6">Do you want to send a "Payment Confirmed" email to the customer?</p>
+                <div class="flex flex-col gap-2">
+                    <button class="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors" id="pc-send">Yes, Confirm & Send Email</button>
+                    <button class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors" id="pc-no-send">Yes, Confirm (No Email)</button>
+                    <button class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg text-sm font-bold mt-2 transition-colors" id="pc-cancel">Cancel</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(div);
+        document.getElementById('pc-send').onclick = () => { div.remove(); resolve({ confirm: true, sendEmail: true }); };
+        document.getElementById('pc-no-send').onclick = () => { div.remove(); resolve({ confirm: true, sendEmail: false }); };
+        document.getElementById('pc-cancel').onclick = () => { div.remove(); resolve({ confirm: false }); };
+    });
+}
+
+async function updateOrdPaymentStatus(eventId, orderId, isConfirmed, checkboxElem) {
+    let sendEmail = false;
+    
+    if (isConfirmed) {
+        const result = await paymentConfirmPrompt();
+        if (!result.confirm) {
+            // Revert checkbox
+            if (checkboxElem) checkboxElem.checked = false;
+            return;
+        }
+        sendEmail = result.sendEmail;
+    }
+
     const badge = document.getElementById(`payment-badge-${orderId}`);
     if (badge) {
         const textSpan = badge.querySelector('span');
@@ -1329,9 +1376,14 @@ async function updateOrdPaymentStatus(eventId, orderId, isConfirmed) {
             if (textSpan) textSpan.innerHTML = "PAYMENT";
         }
     }
-    await apiCall('ADMIN_UPDATE_ORDER_PAYMENT', { eventId, orderId, isConfirmed }, true);
+    await apiCall('ADMIN_UPDATE_ORDER_PAYMENT', { eventId, orderId, isConfirmed, sendEmail }, true);
     const idx = State.ordersCache.findIndex(o => o.orderId === orderId);
     if(idx > -1) State.ordersCache[idx].paymentConfirmed = isConfirmed;
+
+    const card = document.querySelector(`.order-card[data-id="${orderId}"]`);
+    if (card) card.setAttribute('data-payment', isConfirmed ? 'paid' : 'unpaid');
+    
+    filterAdminOrders();
 }
 
 async function updateOrdStatus(eventId, orderId, status) {

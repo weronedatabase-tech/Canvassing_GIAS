@@ -50,7 +50,7 @@ function doPost(e) {
         data = getVendorFolderUrl(req.eventId);
         break;
       case 'ADMIN_UPDATE_ORDER_PAYMENT':
-        data = updateOrderPaymentStatus(req.eventId, req.orderId, req.isConfirmed);
+        data = updateOrderPaymentStatus(req.eventId, req.orderId, req.isConfirmed, req.sendEmail);
         break;
       case 'ADMIN_EDIT_ORDER': 
         data = editOrder(req.eventId, req.orderId, req.updatedData); 
@@ -695,7 +695,7 @@ function resendOrderEmail(eventId, orderId) {
   return { emailStatus: emailStatus };
 }
 
-function updateOrderPaymentStatus(eventId, orderId, isConfirmed) {
+function updateOrderPaymentStatus(eventId, orderId, isConfirmed, sendEmail) {
   const sheetId = getSheetIdForEvent(eventId);
   const ss = SpreadsheetApp.openById(sheetId);
   const sheet = ss.getSheets()[0];
@@ -711,7 +711,7 @@ function updateOrderPaymentStatus(eventId, orderId, isConfirmed) {
     if (String(data[i][0]).trim() === String(orderId).trim()) {
       sheet.getRange(i + 2, 14).setValue(isConfirmed);
       
-      if (!found && isConfirmed) {
+      if (!found && isConfirmed && sendEmail) {
         const customerName = data[i][6];
         const email = data[i][8];
         
