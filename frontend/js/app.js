@@ -1921,7 +1921,7 @@ async function renderPaymentPage(container, params) {
                 <ul class="text-sm space-y-1 mb-2 text-gray-800 dark:text-gray-200">
                     ${po.cart.map(i => `<li>${i.qty}x ${escapeHTML(i.name)}</li>`).join('')}
                 </ul>
-                <p class="font-bold text-gray-900 dark:text-white border-t border-gray-300 dark:border-gray-700 pt-2">Total: $${po.amount.toFixed(2)}</p>
+                <p class="font-bold text-gray-900 dark:text-white border-t border-gray-300 dark:border-gray-700 pt-2">Total: $${parseFloat(po.amount).toFixed(2)}</p>
             </div>
         `;
     }
