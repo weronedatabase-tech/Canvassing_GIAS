@@ -13,6 +13,9 @@ function doPost(e) {
     let data = null;
     
     switch(req.action) {
+      case 'CHECK_PENDING_ORDERS':
+        data = checkPendingOrders(req.orders);
+        break;
       case 'INIT': 
         data = getMasterConfig(); 
         break;
@@ -942,4 +945,42 @@ function generatePayNowString(proxyValue, amount, ref) {
     }
     crc = (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
     return payload + crc;
+}
+
+
+function checkPendingOrders(ordersToCheck) {
+  const results = {};
+  if (!ordersToCheck || !ordersToCheck.length) return results;
+  
+  const byEvent = {};
+  ordersToCheck.forEach(p => {
+    if (!byEvent[p.eventId]) byEvent[p.eventId] = [];
+    byEvent[p.eventId].push(p.orderId);
+  });
+
+  for (const eventId in byEvent) {
+    try {
+      const sheetId = getSheetIdForEvent(eventId);
+      if (!sheetId) continue;
+      const ss = SpreadsheetApp.openById(sheetId);
+      const sheet = ss.getSheets()[0];
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) continue;
+      
+      const data = sheet.getRange(2, 1, lastRow - 1, 14).getValues();
+      
+      byEvent[eventId].forEach(orderId => {
+        const row = data.find(r => String(r[0]).trim() === String(orderId).trim());
+        if (row) {
+          const isPaid = row[13] === true || String(row[13]).toLowerCase() === 'true';
+          if (isPaid) {
+            results[orderId] = true;
+          }
+        }
+      });
+    } catch(e) {
+      // ignore errors for individual sheets
+    }
+  }
+  return results;
 }

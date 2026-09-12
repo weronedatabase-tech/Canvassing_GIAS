@@ -1557,7 +1557,17 @@ async function updateOrdPaymentStatus(eventId, orderId, isConfirmed, checkboxEle
             if (textSpan) textSpan.innerHTML = "PAYMENT";
         }
     }
+
     await apiCall('ADMIN_UPDATE_ORDER_PAYMENT', { eventId, orderId, isConfirmed, sendEmail }, true);
+    if (isConfirmed) {
+        let pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
+        const initialLen = pendingOrders.length;
+        pendingOrders = pendingOrders.filter(p => p.orderId !== orderId);
+        if (pendingOrders.length !== initialLen) {
+            localStorage.setItem('pendingOrders', JSON.stringify(pendingOrders));
+        }
+    }
+
     const idx = State.ordersCache.findIndex(o => o.orderId === orderId);
     if(idx > -1) State.ordersCache[idx].paymentConfirmed = isConfirmed;
 
@@ -2046,3 +2056,36 @@ window.addEventListener('pageshow', (event) => {
         }
     }
 });
+
+
+async function verifyPendingOrders() {
+    let pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
+    if (pendingOrders.length === 0) return;
+    
+    const reqOrders = pendingOrders.map(p => ({ eventId: p.storeId, orderId: p.orderId }));
+    try {
+        const res = await fetch('/api/gas', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'CHECK_PENDING_ORDERS', orders: reqOrders }) });
+        const json = await res.json();
+        if (json.success && json.data) {
+            const paidMap = json.data;
+            let changed = false;
+            pendingOrders = pendingOrders.filter(p => {
+                if (paidMap[p.orderId]) {
+                    changed = true;
+                    return false;
+                }
+                return true;
+            });
+            if (changed) {
+                localStorage.setItem('pendingOrders', JSON.stringify(pendingOrders));
+                const container = document.getElementById('app-container');
+                if (window.location.pathname === '/' || window.location.pathname === '/index.html') {
+                    renderLanding(container);
+                }
+            }
+        }
+    } catch(e) {
+        console.error("verifyPendingOrders error", e);
+    }
+}
+verifyPendingOrders();
