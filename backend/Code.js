@@ -550,6 +550,7 @@ function updateOrderStatus(eventId, orderId, newStatus) {
     }
   }
   if (!found) throw new Error("Order ID not found.");
+  SpreadsheetApp.flush();
   return { success: true };
 }
 
@@ -647,6 +648,7 @@ function editOrder(eventId, orderId, updatedData) {
     emailStatus = _sendOrderEmail(email, orderId, updatedData.customer, items, updatedData.total, store, updatedData.sendEmailType || 'UPDATE');
   }
   
+  SpreadsheetApp.flush();
   return { success: true, emailStatus: emailStatus };
 }
 
@@ -741,6 +743,7 @@ function updateOrderPaymentStatus(eventId, orderId, isConfirmed, sendEmail) {
     }
   }
   if (!found) throw new Error("Order ID not found.");
+  SpreadsheetApp.flush();
   return { success: true, emailStatus: emailStatus };
 }
 
