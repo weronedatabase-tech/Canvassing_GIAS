@@ -1808,11 +1808,11 @@ function exportConfirmPrompt(unpaidOrders) {
                 <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">The following orders have not been marked as paid. Please select the ones you want to <strong>INCLUDE</strong> in the vendor export.</p>
                 <div class="flex-1 overflow-y-auto mb-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 p-2 space-y-2">
                     ${unpaidOrders.map(o => `
-                        <label class="flex items-center gap-3 p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded cursor-pointer transition-colors">
-                            <input type="checkbox" class="export-include-cb w-5 h-5 rounded text-blue-600 accent-blue-600" value="${o.orderId}">
-                            <div>
-                                <p class="font-bold text-sm">${escapeHTML(o.customer)} (${escapeHTML(o.orderId)})</p>
-                                <p class="text-xs text-gray-500 dark:text-gray-400">${o.total.toFixed(2)} - ${o.items.map(i => i.qty + 'x ' + escapeHTML(i.name)).join(', ')}</p>
+                        <label class="flex items-start gap-3 p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded cursor-pointer transition-colors">
+                            <input type="checkbox" class="export-include-cb w-5 h-5 rounded text-blue-600 accent-blue-600 shrink-0 mt-0.5" value="${o.orderId}">
+                            <div class="flex-1 min-w-0">
+                                <p class="font-bold text-sm break-words">${escapeHTML(o.customer)} (${escapeHTML(o.orderId)})</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 break-words">${o.total.toFixed(2)} - ${o.items.map(i => i.qty + 'x ' + escapeHTML(i.name)).join(', ')}</p>
                             </div>
                         </label>
                     `).join('')}
