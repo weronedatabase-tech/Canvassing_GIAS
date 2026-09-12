@@ -451,7 +451,7 @@ function _sendOrderEmail(email, orderId, customerName, cart, totalAmount, store,
        </tr>`
     ).join('');
 
-    const titleText = isUpdate ? "Updated Order Confirmation" : "Order Confirmation";
+    const titleText = isUpdate ? "Updated Order Processing" : "Order Processing";
     const customIntro = store.emailIntro ? store.emailIntro.replace(/\n/g, '<br>') : `Hi ${customerName},<br>Thank you for your support!`;
     const customFooter = store.emailFooter ? store.emailFooter.replace(/\n/g, '<br>') : `Thank you.`;
 
