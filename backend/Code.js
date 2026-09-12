@@ -641,10 +641,10 @@ function editOrder(eventId, orderId, updatedData) {
   }
   
   let emailStatus = null;
-  if (email && email.includes('@')) {
+  if (email && email.includes('@') && updatedData.sendEmailType !== 'NONE') {
     const config = getMasterConfig();
     const store = config.stores.find(s => s.id === eventId);
-    emailStatus = _sendOrderEmail(email, orderId, updatedData.customer, items, updatedData.total, store, 'UPDATE');
+    emailStatus = _sendOrderEmail(email, orderId, updatedData.customer, items, updatedData.total, store, updatedData.sendEmailType || 'UPDATE');
   }
   
   return { success: true, emailStatus: emailStatus };
