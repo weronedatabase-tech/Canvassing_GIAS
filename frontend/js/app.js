@@ -1898,10 +1898,20 @@ async function adminOpenVendorFolder(eventId) {
 
 
 async function renderPaymentPage(container, params) {
-    const store = State.masterConfig.stores.find(s => s.id === State.activeStoreId);
-    
     let pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
     let po = pendingOrders.find(p => p.orderId === params.orderId);
+    
+    if (po && po.storeId) {
+        State.activeStoreId = po.storeId;
+        saveState();
+    }
+    
+    const store = State.masterConfig.stores.find(s => s.id === State.activeStoreId);
+    
+    if (!store) {
+        container.innerHTML = `<div class="p-6 text-center text-red-500">Error: Store not found.</div>`;
+        return;
+    }
     
     let summaryHtml = '';
     if (po && po.cart && po.cart.length > 0) {
