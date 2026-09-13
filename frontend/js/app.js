@@ -180,11 +180,17 @@ async function renderView(view, params = {}) {
     document.getElementById('backBtn').classList.toggle('hidden', view === 'landing');
     document.getElementById('headerCartIcon').classList.toggle('hidden', view !== 'store_shop');
     
-    if (view.startsWith('admin_')) {
+    if (view.startsWith('admin_') || view === 'payment' || view === 'checkout' || view === 'landing' || view === 'store_info' || view === 'store_shop' || view === 'cart' || view === 'success') {
         container.classList.remove('max-w-lg');
-        container.classList.add('w-full', 'max-w-[1600px]');
+        container.classList.add('w-full', 'max-w-7xl');
         headerContainer.classList.remove('max-w-lg');
-        headerContainer.classList.add('w-full', 'max-w-[1600px]');
+        headerContainer.classList.add('w-full', 'max-w-7xl');
+        if (view.startsWith('admin_')) {
+             container.classList.remove('max-w-7xl');
+             container.classList.add('max-w-[1600px]');
+             headerContainer.classList.remove('max-w-7xl');
+             headerContainer.classList.add('max-w-[1600px]');
+        }
     } else {
         container.classList.add('max-w-lg');
         container.classList.remove('w-full', 'max-w-[1600px]', 'max-w-7xl');
@@ -265,7 +271,7 @@ async function renderLanding(container) {
     let html = `<div class="p-3 fade-in">
         ${pendingOrdersHtml}
         <h2 class="text-2xl font-display font-semibold mb-4 tracking-tight">Active Fundraisers</h2>
-        <div class="grid gap-4">`;
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">`;
         
     if (openStores.length === 0) {
         html += `<p class="text-gray-700 dark:text-gray-300 font-medium">No active fundraisers at the moment.</p>`;
@@ -321,8 +327,8 @@ async function renderStoreInfo(container, storeId) {
     
     container.innerHTML = `
         <div class="fade-in pb-8">
-            ${store.bannerImageId ? `<img src="https://lh3.googleusercontent.com/d/${store.bannerImageId}" class="w-full h-48 md:h-64 object-cover shadow-sm">` : ''}
-            <div class="p-4 max-w-xl mx-auto -mt-8 relative z-10">
+            ${store.bannerImageId ? `<img src="https://lh3.googleusercontent.com/d/${store.bannerImageId}" class="w-full h-48 md:h-64 lg:h-80 object-cover shadow-sm">` : ''}
+            <div class="p-4 max-w-2xl mx-auto -mt-8 relative z-10">
                 ${pendingOrdersHtml}
                 <div class="bg-white dark:bg-[#111] p-5 rounded-2xl shadow-sm border border-gray-400 dark:border-gray-800">
                     ${actuallyOpen 
@@ -353,6 +359,15 @@ async function renderStoreShop(container, storeId) {
     if (State.activeStoreId !== storeId) {
         State.cart = [];
     }
+    
+    // Check if there is an existing pending order for this store
+    let pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
+    if (pendingOrders.some(p => p.storeId === storeId)) {
+        // The user is starting a new order, clear cart and remove session ref to get a new order number
+        State.cart = [];
+        sessionStorage.removeItem('currentOrderRef');
+    }
+    
     State.activeStoreId = storeId;
     saveState();
     
@@ -379,7 +394,7 @@ async function renderStoreShop(container, storeId) {
             </div>` : ''}
             ${store.summaryPdfId ? `<a href="https://drive.google.com/file/d/${store.summaryPdfId}/view" target="_blank" class="block w-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 py-3 px-4 rounded-xl font-bold mb-6 text-center border border-blue-200 dark:border-blue-800 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/50"><i class="fas fa-file-pdf mr-2"></i> View ${store.summaryPdfName || 'Products Summary PDF'}</a>` : ''}
             
-            <div class="grid grid-cols-1 gap-4" id="productList">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="productList">
                 ${State.products.length === 0 ? '<p>No items.</p>' : State.products.map(p => {
                     const inCart = State.cart.find(c => c.id === p.id);
                     const qtyHtml = inCart 
@@ -408,7 +423,7 @@ async function renderStoreShop(container, storeId) {
             </div>
             
             <div class="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t dark:border-gray-700 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-30">
-                <div class="max-w-lg mx-auto">
+                <div class="max-w-7xl mx-auto">
                     <button onclick="Router.navigate('cart')" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg flex justify-between px-6 items-center">
                         <span>View Cart</span>
                         <span id="bottomTotal" class="bg-green-700 px-2 py-1 rounded text-sm">$${getCartTotal()}</span>
@@ -512,8 +527,8 @@ async function renderCartPage(container) {
                 <div class="flex justify-between font-bold text-lg"><span>Total:</span><span>$${getCartTotal()}</span></div>
             </div>
             
-            <div class="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t dark:border-gray-700 z-30">
-                <div class="max-w-lg mx-auto flex gap-2">
+            <div class="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t dark:border-gray-700 z-30 flex justify-center">
+                <div class="w-full max-w-7xl flex gap-2">
                     <button onclick="Router.navigate('store_shop', {id: '${State.activeStoreId}'})" class="flex-1 bg-gray-200 dark:bg-gray-700 py-3 rounded-lg font-bold">Back</button>
                     <button onclick="Router.navigate('checkout')" class="flex-[2] bg-green-600 text-white py-3 rounded-lg font-bold">Checkout</button>
                 </div>
@@ -586,12 +601,12 @@ async function renderCheckout(container) {
         <div class="p-4 fade-in pb-10">
             <h2 class="text-xl font-bold mb-4">Checkout</h2>
             
-            <form id="checkoutForm" onsubmit="handleOrderSubmit(event)" class="space-y-4">
+            <form id="checkoutForm" onsubmit="handleOrderSubmit(event)" class="space-y-4 max-w-2xl mx-auto">
                 
                 <div class="bg-white dark:bg-gray-800 p-4 rounded shadow border border-gray-400 dark:border-gray-700">
                     <h3 class="font-bold mb-3 border-b pb-2 dark:border-gray-700">1. Your Details</h3>
                     <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Full Name</label><input type="text" id="custName" required class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
-                    <div class="grid grid-cols-2 gap-3 mt-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                         <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">WhatsApp No.</label><input type="tel" id="custPhone" required pattern="^[89][0-9]{7}$" placeholder="8 digits" class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
                         <div><label class="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase">Email</label><input type="email" id="custEmail" required class="w-full p-2 border border-gray-400 rounded mt-1 dark:bg-gray-700 dark:border-gray-600"></div>
                     </div>
@@ -781,7 +796,7 @@ async function renderAdminDashboard(container, forceRefresh = false) {
                     Stores
                     <button onclick="createNewStorePrompt()" class="bg-gray-900 text-white dark:bg-white dark:text-gray-900 px-4 py-1.5 rounded-lg text-sm font-semibold transition-transform active:scale-95"><i class="fas fa-plus mr-1"></i> New</button>
                 </h3>
-                <div class="space-y-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     ${config.stores.map(s => {
                         const today = new Date();
                         today.setHours(0,0,0,0);
@@ -918,7 +933,7 @@ async function manageStore(storeId, initialTab = 'info') {
                 </div>
 
             <!-- SETTINGS TAB -->
-            <div id="panel-info" class="space-y-4">
+            <div id="panel-info" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Fundraiser Name</label>
                     <input type="text" id="stName" value="${config.name || ''}" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg dark:bg-[#1a1a1a] text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all">
@@ -935,61 +950,65 @@ async function manageStore(storeId, initialTab = 'info') {
                     <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Banner Image (Will overwrite existing)</label>
                     <input type="file" id="stBanner" accept="image/*" class="w-full text-sm file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 dark:file:bg-gray-800 dark:file:text-gray-300">
                 </div>
-                <div>
+                <div class="md:col-span-2">
                     <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Info Rich Text</label>
                     <div class="border border-gray-400 dark:border-gray-800 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-gray-900 dark:focus-within:ring-gray-100 transition-all">
                         <div id="stInfo" class="min-h-[120px] text-sm dark:bg-[#1a1a1a] bg-white">${config.infoHtml || ''}</div>
                     </div>
                 </div>
-                <div>
+                <div class="md:col-span-2">
                     <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Email Intro</label>
                     <textarea id="stEmailIn" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg text-sm dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all overflow-hidden resize-none">${config.emailIntro || ''}</textarea>
                 </div>
-                <button onclick="saveStoreSettings('${storeId}')" class="w-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 py-2.5 rounded-lg font-bold shadow-md hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors active:scale-95">Save Settings</button>
+                <div class="md:col-span-2 mt-2">
+                    <button onclick="saveStoreSettings('${storeId}')" class="w-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 py-2.5 rounded-lg font-bold shadow-md hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors active:scale-95">Save Settings</button>
+                </div>
             </div>
 
             <!-- PRODUCTS TAB -->
             <div id="panel-products" class="hidden">
-                <div class="bg-gray-50 dark:bg-[#1a1a1a] p-3 md:p-4 rounded-xl border border-gray-400 dark:border-gray-800 mb-4">
-                    <h4 class="font-bold text-sm mb-3">Products' Summary List Image / File</h4>
-                    ${config.summaryImageId ? `
-                        <div class="mb-3 p-2 bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 flex justify-between items-center gap-2">
-                            <span class="text-xs text-green-600 dark:text-green-400 font-bold flex-1 min-w-0 break-all"><i class="fas fa-check-circle mr-1"></i> Image: ${escapeHTML(config.summaryImageName || 'Image uploaded')}</span>
-                            <button onclick="adminRemoveSummaryFile('${storeId}', 'image')" class="text-red-500 hover:text-red-700 text-xs font-bold shrink-0"><i class="fas fa-trash"></i> Remove</button>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-gray-50 dark:bg-[#1a1a1a] p-3 md:p-4 rounded-xl border border-gray-400 dark:border-gray-800">
+                        <h4 class="font-bold text-sm mb-3">Products' Summary List Image / File</h4>
+                        ${config.summaryImageId ? `
+                            <div class="mb-3 p-2 bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 flex justify-between items-center gap-2">
+                                <span class="text-xs text-green-600 dark:text-green-400 font-bold flex-1 min-w-0 break-all"><i class="fas fa-check-circle mr-1"></i> Image: ${escapeHTML(config.summaryImageName || 'Image uploaded')}</span>
+                                <button onclick="adminRemoveSummaryFile('${storeId}', 'image')" class="text-red-500 hover:text-red-700 text-xs font-bold shrink-0"><i class="fas fa-trash"></i> Remove</button>
+                            </div>
+                        ` : ''}
+                        <div class="mb-3 relative">
+                            <label id="summaryImageLabel" for="summaryImage" class="block w-full text-center p-3 px-4 border border-dashed border-gray-400 dark:border-gray-600 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors break-all overflow-hidden">Choose Products Summary Image</label>
+                            <input type="file" id="summaryImage" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('summaryImageLabel').textContent = this.files[0] ? this.files[0].name : 'Choose Products Summary Image'">
                         </div>
-                    ` : ''}
-                    <div class="mb-3 relative">
-                        <label id="summaryImageLabel" for="summaryImage" class="block w-full text-center p-3 px-4 border border-dashed border-gray-400 dark:border-gray-600 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors break-all overflow-hidden">Choose Products Summary Image</label>
-                        <input type="file" id="summaryImage" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('summaryImageLabel').textContent = this.files[0] ? this.files[0].name : 'Choose Products Summary Image'">
-                    </div>
-                    <button onclick="adminUploadSummaryFile('${storeId}', 'image')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold text-sm transition-transform active:scale-95 hover:bg-blue-700 mb-4">Upload Image</button>
+                        <button onclick="adminUploadSummaryFile('${storeId}', 'image')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold text-sm transition-transform active:scale-95 hover:bg-blue-700 mb-4">Upload Image</button>
 
-                    ${config.summaryPdfId ? `
-                        <div class="mb-3 p-2 bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 flex justify-between items-center gap-2">
-                            <span class="text-xs text-green-600 dark:text-green-400 font-bold flex-1 min-w-0 break-all"><i class="fas fa-check-circle mr-1"></i> PDF: ${escapeHTML(config.summaryPdfName || 'PDF uploaded')}</span>
-                            <button onclick="adminRemoveSummaryFile('${storeId}', 'pdf')" class="text-red-500 hover:text-red-700 text-xs font-bold shrink-0"><i class="fas fa-trash"></i> Remove</button>
+                        ${config.summaryPdfId ? `
+                            <div class="mb-3 p-2 bg-white dark:bg-gray-800 rounded border border-gray-300 dark:border-gray-700 flex justify-between items-center gap-2">
+                                <span class="text-xs text-green-600 dark:text-green-400 font-bold flex-1 min-w-0 break-all"><i class="fas fa-check-circle mr-1"></i> PDF: ${escapeHTML(config.summaryPdfName || 'PDF uploaded')}</span>
+                                <button onclick="adminRemoveSummaryFile('${storeId}', 'pdf')" class="text-red-500 hover:text-red-700 text-xs font-bold shrink-0"><i class="fas fa-trash"></i> Remove</button>
+                            </div>
+                        ` : ''}
+                        <div class="mb-3 relative">
+                            <label id="summaryPdfLabel" for="summaryPdf" class="block w-full text-center p-3 px-4 border border-dashed border-gray-400 dark:border-gray-600 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors break-all overflow-hidden">Choose Products Summary PDF</label>
+                            <input type="file" id="summaryPdf" accept="application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('summaryPdfLabel').textContent = this.files[0] ? this.files[0].name : 'Choose Products Summary PDF'">
                         </div>
-                    ` : ''}
-                    <div class="mb-3 relative">
-                        <label id="summaryPdfLabel" for="summaryPdf" class="block w-full text-center p-3 px-4 border border-dashed border-gray-400 dark:border-gray-600 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors break-all overflow-hidden">Choose Products Summary PDF</label>
-                        <input type="file" id="summaryPdf" accept="application/pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="document.getElementById('summaryPdfLabel').textContent = this.files[0] ? this.files[0].name : 'Choose Products Summary PDF'">
+                        <button onclick="adminUploadSummaryFile('${storeId}', 'pdf')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold text-sm transition-transform active:scale-95 hover:bg-blue-700 mb-2">Upload PDF</button>
                     </div>
-                    <button onclick="adminUploadSummaryFile('${storeId}', 'pdf')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-bold text-sm transition-transform active:scale-95 hover:bg-blue-700 mb-2">Upload PDF</button>
+                    <div class="bg-gray-50 dark:bg-[#1a1a1a] p-3 md:p-4 rounded-xl border border-gray-400 dark:border-gray-800">
+                        <h4 class="font-bold text-sm mb-3">Add Product</h4>
+                        <div class="grid grid-cols-2 gap-2 mb-2">
+                            <input type="text" id="pName" placeholder="Name" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-[#222]">
+                            <input type="number" id="pPrice" placeholder="Price" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-[#222]">
+                        </div>
+                        <textarea id="pDesc" placeholder="Description" rows="1" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg mb-2 text-sm bg-white dark:bg-[#222] resize-none overflow-hidden" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px'"></textarea>
+                        <div class="mb-3 relative">
+                            <label for="pImg" class="block w-full text-center p-2 border border-dashed border-gray-400 dark:border-gray-600 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Choose Product Image</label>
+                            <input type="file" id="pImg" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="this.previousElementSibling.textContent = this.files[0] ? this.files[0].name : 'Choose Product Image'">
+                        </div>
+                        <button onclick="adminAddProduct('${storeId}')" class="w-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 py-2 rounded-lg font-bold text-sm transition-transform active:scale-95">Add Item</button>
+                    </div>
                 </div>
-                <div class="bg-gray-50 dark:bg-[#1a1a1a] p-3 md:p-4 rounded-xl border border-gray-400 dark:border-gray-800 mb-4">
-                    <h4 class="font-bold text-sm mb-3">Add Product</h4>
-                    <div class="grid grid-cols-2 gap-2 mb-2">
-                        <input type="text" id="pName" placeholder="Name" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-[#222]">
-                        <input type="number" id="pPrice" placeholder="Price" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg text-sm bg-white dark:bg-[#222]">
-                    </div>
-                    <textarea id="pDesc" placeholder="Description" rows="1" class="w-full p-2 border border-gray-400 dark:border-gray-700 rounded-lg mb-2 text-sm bg-white dark:bg-[#222] resize-none overflow-hidden" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px'"></textarea>
-                    <div class="mb-3 relative">
-                        <label for="pImg" class="block w-full text-center p-2 border border-dashed border-gray-400 dark:border-gray-600 rounded-lg cursor-pointer text-sm bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">Choose Product Image</label>
-                        <input type="file" id="pImg" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="this.previousElementSibling.textContent = this.files[0] ? this.files[0].name : 'Choose Product Image'">
-                    </div>
-                    <button onclick="adminAddProduct('${storeId}')" class="w-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 py-2 rounded-lg font-bold text-sm transition-transform active:scale-95">Add Item</button>
-                </div>
-                <div id="adminProductsList" class="space-y-2">
+                <div id="adminProductsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 mt-4">
                     ${renderAdminProductsList(products, storeId)}
                 </div>
             </div>
@@ -1010,7 +1029,7 @@ async function manageStore(storeId, initialTab = 'info') {
                         <option value="unpaid">Unpaid</option>
                     </select>
                 </div>
-                <div id="ordersList" class="space-y-3 h-[calc(100vh-280px)] overflow-y-auto pr-1">
+                <div id="ordersList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 h-[calc(100vh-280px)] overflow-y-auto pr-1">
                     ${renderOrderList(orders, storeId)}
                 </div>
             </div>
@@ -1383,7 +1402,7 @@ function renderAdminSummary(orders, products, storeId) {
     `;
 
     return `
-        <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800">
                 <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1 flex items-center justify-between">Expected Revenue <i class="fas fa-money-bill-wave"></i></p>
                 <p class="text-2xl font-bold text-gray-900 dark:text-gray-100">$${totalRevenue.toFixed(2)}</p>
@@ -1392,14 +1411,15 @@ function renderAdminSummary(orders, products, storeId) {
                 <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1 flex items-center justify-between">Payment Made <i class="fas fa-check-circle"></i></p>
                 <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-500">$${totalPaymentMade.toFixed(2)}</p>
             </div>
-            <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800 col-span-2">
+            <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800">
                 <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1 flex items-center justify-between">Total Orders <i class="fas fa-shopping-bag"></i></p>
                 <p class="text-2xl font-bold text-blue-600 dark:text-blue-500">${orders.length}</p>
             </div>
-        </div>
-        <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800 mb-6">
-            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Top Selling Item</p>
-            <p class="text-lg font-bold text-gray-900 dark:text-gray-100 break-words">${topSelling.name} <span class="text-sm text-gray-500 dark:text-gray-400 font-normal ml-1 whitespace-nowrap">(${topSelling.qty} units)</span></p>
+            <div class="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-400 dark:border-gray-800">
+                <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1 flex items-center justify-between">Top Selling Item <i class="fas fa-star text-amber-500"></i></p>
+                <p class="text-lg font-bold text-gray-900 dark:text-gray-100 break-words">${topSelling.name}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">${topSelling.qty} units</p>
+            </div>
         </div>
         
         <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-3">
@@ -1668,10 +1688,10 @@ function adminEditOrderModal(eventId, orderId) {
     }).join('');
 
     div.innerHTML = `
-        <div class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800 max-h-[90vh] overflow-y-auto relative">
+        <div class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white p-6 rounded-xl shadow-2xl max-w-2xl w-full mx-4 border border-gray-200 dark:border-gray-800 max-h-[90vh] overflow-y-auto relative">
             <h3 class="text-lg font-bold mb-4">Edit Order: ${escapeHTML(order.orderId)}</h3>
             
-            <div class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">Customer Name</label>
                     <input type="text" id="edit-customer" value="${escapeHTML(order.customer).replace(/"/g, '&quot;')}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
@@ -1694,14 +1714,14 @@ function adminEditOrderModal(eventId, orderId) {
                         <option value="Public" ${order.custType === 'Public' ? 'selected' : ''}>Public</option>
                     </select>
                 </div>
-                <div id="edit-relationContainer" class="${(order.custType === 'Friend of Volunteer' || order.custType === 'Caregiver') ? '' : 'hidden'}">
+                <div id="edit-relationContainer" class="${(order.custType === 'Friend of Volunteer' || order.custType === 'Caregiver') ? '' : 'hidden'} md:col-span-2">
                     <label id="edit-relationLabel" class="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1">${order.custType === 'Caregiver' ? "Trainee's Name" : "Volunteer's Name"}</label>
                     <input type="text" id="edit-relation" value="${escapeHTML(order.custRelationName || '').replace(/"/g, '&quot;')}" class="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg text-sm bg-gray-50 dark:bg-black focus:outline-none focus:ring-2 focus:ring-gray-900">
                 </div>
                 
-                <div class="mt-4">
+                <div class="mt-4 md:col-span-2">
                     <label class="block text-sm font-bold mb-2 border-b pb-1 dark:border-gray-800">Order Items</label>
-                    <div class="max-h-40 overflow-y-auto">
+                    <div class="max-h-60 overflow-y-auto">
                         ${productsHtml}
                     </div>
                 </div>
@@ -1813,7 +1833,7 @@ function exportConfirmPrompt(unpaidOrders) {
         const div = document.createElement('div');
         div.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4';
         div.innerHTML = `
-            <div class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white p-6 rounded-xl shadow-2xl max-w-lg w-full border border-gray-200 dark:border-gray-800 max-h-[90vh] flex flex-col">
+            <div class="bg-white dark:bg-gray-900 text-gray-900 dark:text-white p-6 rounded-xl shadow-2xl max-w-2xl w-full border border-gray-200 dark:border-gray-800 max-h-[90vh] flex flex-col">
                 <h3 class="text-lg font-bold mb-2 text-amber-600"><i class="fas fa-exclamation-triangle"></i> Unpaid Orders Detected</h3>
                 <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">The following orders have not been marked as paid. Please select the ones you want to <strong>INCLUDE</strong> in the vendor export.</p>
                 <div class="flex-1 overflow-y-auto mb-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 p-2 space-y-2">
@@ -1937,38 +1957,42 @@ async function renderPaymentPage(container, params) {
     }
 
     container.innerHTML = `
-        <div class="p-4 fade-in pb-10">
+        <div class="p-4 fade-in pb-10 max-w-4xl mx-auto">
             <h2 class="text-xl font-bold mb-4">Complete Payment</h2>
             
-            <div class="bg-blue-50 dark:bg-blue-900/30 p-3 mb-4 rounded border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-300">
-                <i class="fas fa-info-circle mr-1"></i> Please make your payment using the QR code below and upload the screenshot here. You will receive an email confirmation once the screenshot is uploaded. If you lose this page before uploading, open the fundraising link again to see a notification to bring you back to this page. Alternatively, you can also WhatsApp the payment screenshot to <strong>83282989</strong>.
-            </div>
-            
-            ${summaryHtml}
-            
-            <form id="paymentForm" onsubmit="handlePaymentSubmit(event, '${escapeHTML(params.orderId)}', '${escapeHTML(params.name)}', '${escapeHTML(params.email)}')" class="space-y-4">
-                <div class="bg-white dark:bg-gray-800 border-2 border-purple-800 p-4 rounded shadow relative">
-                    <h3 class="font-bold mb-2">Payment Details</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4"><span class="font-bold text-purple-700 dark:text-purple-400 text-base">PayNow</span> using the QR code below.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                <div>
+                    <div class="bg-blue-50 dark:bg-blue-900/30 p-3 mb-4 rounded border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-300">
+                        <i class="fas fa-info-circle mr-1"></i> Please make your payment using the QR code below and upload the screenshot here. You will receive an email confirmation once the screenshot is uploaded. If you lose this page before uploading, open the fundraising link again to see a notification to bring you back to this page. Alternatively, you can also WhatsApp the payment screenshot to <strong>83282989</strong>.
+                    </div>
                     
-                    <div class="flex items-center gap-4">
-                        <canvas id="qrCanvas" class="w-32 h-32 bg-white p-1 rounded"></canvas>
-                        <div>
-                            <p class="text-sm">Pay: <span class="text-xl font-bold text-purple-700 dark:text-purple-400">$${params.amount}</span></p>
-                            <p class="text-sm">To: <span class="font-mono font-bold">${store.paynowNumber || 'Not Set'}</span></p>
-                            <p class="text-xs bg-purple-100 dark:bg-purple-900 px-2 py-1 rounded mt-1">Ref: <span id="qrRefDisplay" class="font-mono font-bold">${escapeHTML(params.orderId)}</span></p>
+                    ${summaryHtml}
+                </div>
+                
+                <form id="paymentForm" onsubmit="handlePaymentSubmit(event, '${escapeHTML(params.orderId)}', '${escapeHTML(params.name)}', '${escapeHTML(params.email)}')" class="space-y-4">
+                    <div class="bg-white dark:bg-gray-800 border-2 border-purple-800 p-4 rounded shadow relative">
+                        <h3 class="font-bold mb-2">Payment Details</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4"><span class="font-bold text-purple-700 dark:text-purple-400 text-base">PayNow</span> using the QR code below.</p>
+                        
+                        <div class="flex items-center gap-4">
+                            <canvas id="qrCanvas" class="w-32 h-32 bg-white p-1 rounded"></canvas>
+                            <div>
+                                <p class="text-sm">Pay: <span class="text-xl font-bold text-purple-700 dark:text-purple-400">$${params.amount}</span></p>
+                                <p class="text-sm break-all">To: <span class="font-mono font-bold">${store.paynowNumber || 'Not Set'}</span></p>
+                                <p class="text-xs bg-purple-100 dark:bg-purple-900 px-2 py-1 rounded mt-1 break-all">Ref: <span id="qrRefDisplay" class="font-mono font-bold">${escapeHTML(params.orderId)}</span></p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <label class="block text-sm font-extrabold text-blue-700 dark:text-blue-400 uppercase mb-1">Upload Successful Payment Screenshot</label>
+                            <input type="file" id="paymentProof" accept="image/*" required class="w-full text-sm">
                         </div>
                     </div>
                     
-                    <div class="mt-4">
-                        <label class="block text-sm font-extrabold text-blue-700 dark:text-blue-400 uppercase mb-1">Upload Successful Payment Screenshot</label>
-                        <input type="file" id="paymentProof" accept="image/*" required class="w-full text-sm">
-                    </div>
-                </div>
-                
-                <button type="submit" id="submitPaymentBtn" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg">Submit Payment Proof</button>
-                <button type="button" onclick="cancelPendingOrder('${State.activeStoreId}', '${escapeHTML(params.orderId)}')" class="w-full mt-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 py-2 rounded-lg font-bold transition-colors">Cancel Order</button>
-            </form>
+                    <button type="submit" id="submitPaymentBtn" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg transition-transform active:scale-95">Submit Payment Proof</button>
+                    <button type="button" onclick="cancelPendingOrder('${State.activeStoreId}', '${escapeHTML(params.orderId)}')" class="w-full mt-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 py-2 rounded-lg font-bold transition-colors">Cancel Order</button>
+                </form>
+            </div>
         </div>
     `;
 
