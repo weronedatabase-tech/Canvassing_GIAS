@@ -113,7 +113,8 @@ function getMasterConfig() {
          infoHtml: "Welcome to " + f.getName(),
          bannerImageId: null,
          paynowNumber: "",
-         emailIntro: "",
+         emailProcessing: "",
+         emailConfirmed: "",
          emailFooter: ""
        });
     }
@@ -248,7 +249,8 @@ function createStore(name) {
     infoHtml: "Welcome to " + name,
     bannerImageId: null,
     paynowNumber: "",
-    emailIntro: "",
+    emailProcessing: "",
+         emailConfirmed: "",
     emailFooter: "",
     sheetId: sheetId
   };

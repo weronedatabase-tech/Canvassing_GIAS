@@ -1068,13 +1068,17 @@ async function manageStore(storeId, initialTab = 'info') {
         // Setup Auto-expanding Textarea
         const stEmailProcessing = document.getElementById('stEmailProcessing');
         const stEmailConfirmed = document.getElementById('stEmailConfirmed');
-        if(emailIn) {
-            const autoExpand = function() {
-                this.style.height = 'auto';
-                this.style.height = (this.scrollHeight) + 'px';
-            };
-            emailIn.addEventListener('input', autoExpand);
-            autoExpand.call(emailIn);
+        const autoExpand = function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        };
+        if(stEmailProcessing) {
+            stEmailProcessing.addEventListener('input', autoExpand);
+            autoExpand.call(stEmailProcessing);
+        }
+        if(stEmailConfirmed) {
+            stEmailConfirmed.addEventListener('input', autoExpand);
+            autoExpand.call(stEmailConfirmed);
         }
         
         // Setup Sortable for products
@@ -1159,7 +1163,8 @@ async function saveStoreSettings(id) {
         closingDate: document.getElementById('stClose').value,
         paynowNumber: document.getElementById('stPaynow').value,
         infoHtml: infoHtml,
-        emailIntro: document.getElementById('stEmailIn').value
+        emailProcessing: document.getElementById('stEmailProcessing').value,
+        emailConfirmed: document.getElementById('stEmailConfirmed').value
     };
     if (imageBase64) {
         payload.imageBase64 = imageBase64;
