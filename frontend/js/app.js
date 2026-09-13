@@ -1328,7 +1328,7 @@ function renderOrderList(orders, storeId) {
                             <button onclick="if(confirm('Any existing records will be replaced. Proceed?')) document.getElementById('admin-receipt-${escapeHTML(o.orderId)}').click()" class="text-xs text-blue-500 hover:text-blue-600 font-bold" title="Upload Receipt"><i class="fas fa-upload"></i> Upload Receipt</button>
                         ` : `
                             <span class="text-xs text-gray-500 italic"><i class="fas fa-times-circle mr-1"></i>No Receipt</span>
-                            <button onclick="document.getElementById('admin-receipt-${escapeHTML(o.orderId)}').click()" class="text-xs text-blue-500 hover:text-blue-600 font-bold" title="Upload Receipt"><i class="fas fa-upload"></i> Upload</button>
+                            <button onclick="document.getElementById('admin-receipt-${escapeHTML(o.orderId)}').click()" class="text-xs text-blue-500 hover:text-blue-600 font-bold" title="Upload Receipt"><i class="fas fa-upload"></i> Upload Receipt</button>
                         `}
                         <input type="file" id="admin-receipt-${escapeHTML(o.orderId)}" class="hidden" accept="image/*" onchange="handleAdminReceiptUpload(event, '${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', '${escapeHTML(o.customer).replace(/'/g, "\\'")}')">
                     </div>
