@@ -347,6 +347,7 @@ async function renderStoreInfo(container, storeId) {
 }
 
 async function renderStoreShop(container, storeId) {
+    sessionStorage.removeItem('currentOrderRef');
     const config = await loadMasterConfig();
     const store = config.stores.find(s => s.id === storeId);
     if (!store) return;
@@ -500,6 +501,7 @@ function updateCartCount() {
 }
 
 async function renderCartPage(container) {
+    sessionStorage.removeItem('currentOrderRef');
     if (State.cart.length === 0) {
         container.innerHTML = `<div class="p-6 text-center"><p class="mb-4">Your cart is empty.</p><button onclick="Router.navigate('store_shop', {id: '${State.activeStoreId}'})" class="text-blue-600 underline">Back to Shop</button></div>`;
         return;
@@ -957,8 +959,12 @@ async function manageStore(storeId, initialTab = 'info') {
                     </div>
                 </div>
                 <div class="md:col-span-2">
-                    <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Email Intro</label>
-                    <textarea id="stEmailIn" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg text-sm dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all overflow-hidden resize-none">${config.emailIntro || ''}</textarea>
+                    <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Order Processing Email Message</label>
+                    <textarea id="stEmailProcessing" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg text-sm dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all overflow-hidden resize-none">${config.emailProcessing || ''}</textarea>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Payment Confirmed Email Message</label>
+                    <textarea id="stEmailConfirmed" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg text-sm dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all overflow-hidden resize-none">${config.emailConfirmed || ''}</textarea>
                 </div>
                 <div class="md:col-span-2 mt-2">
                     <button onclick="saveStoreSettings('${storeId}')" class="w-full bg-gray-900 text-white dark:bg-white dark:text-gray-900 py-2.5 rounded-lg font-bold shadow-md hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors active:scale-95">Save Settings</button>
@@ -1060,7 +1066,8 @@ async function manageStore(storeId, initialTab = 'info') {
         });
 
         // Setup Auto-expanding Textarea
-        const emailIn = document.getElementById('stEmailIn');
+        const stEmailProcessing = document.getElementById('stEmailProcessing');
+        const stEmailConfirmed = document.getElementById('stEmailConfirmed');
         if(emailIn) {
             const autoExpand = function() {
                 this.style.height = 'auto';
@@ -1313,7 +1320,7 @@ function renderOrderList(orders, storeId) {
                         ${o.imageUrl && o.imageUrl !== 'No Image' ? `
                             <a href="${escapeHTML(o.imageUrl)}" target="_blank" class="text-xs text-blue-500 hover:text-blue-600 font-bold" title="View Receipt"><i class="fas fa-file-invoice"></i> View</a>
                             <button onclick="adminDeleteReceipt('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-xs text-red-500 hover:text-red-600 font-bold" title="Delete Receipt"><i class="fas fa-trash-alt"></i></button>
-                            <button onclick="document.getElementById('admin-receipt-${escapeHTML(o.orderId)}').click()" class="text-xs text-blue-500 hover:text-blue-600 font-bold" title="Replace Receipt"><i class="fas fa-upload"></i> Replace</button>
+                            <button onclick="if(confirm('Any existing records will be replaced. Proceed?')) document.getElementById('admin-receipt-${escapeHTML(o.orderId)}').click()" class="text-xs text-blue-500 hover:text-blue-600 font-bold" title="Upload Receipt"><i class="fas fa-upload"></i> Upload Receipt</button>
                         ` : `
                             <span class="text-xs text-gray-500 italic"><i class="fas fa-times-circle mr-1"></i>No Receipt</span>
                             <button onclick="document.getElementById('admin-receipt-${escapeHTML(o.orderId)}').click()" class="text-xs text-blue-500 hover:text-blue-600 font-bold" title="Upload Receipt"><i class="fas fa-upload"></i> Upload</button>
@@ -1611,7 +1618,7 @@ async function updateOrdStatus(eventId, orderId, status) {
 
 async function adminDeleteOrder(eventId, orderId) {
     if(!await customConfirm('Are you sure you want to permanently delete this order? It will be moved to the "Deleted Orders" tab in your Google Sheet.')) return;
-    await apiCall('ADMIN_DELETE_ORDER', { eventId, orderId });
+    await apiCall('CUSTOMER_CANCEL_ORDER', { eventId, orderId }, false);
     // Remove from cache
     State.ordersCache = State.ordersCache.filter(x => x.orderId !== orderId);
     

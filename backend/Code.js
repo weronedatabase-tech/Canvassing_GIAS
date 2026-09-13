@@ -64,6 +64,9 @@ function doPost(e) {
       case 'ADMIN_RESEND_EMAIL':
         data = resendOrderEmail(req.eventId, req.orderId);
         break;
+      case 'CUSTOMER_CANCEL_ORDER':
+        data = deleteOrder(req.eventId, req.orderId);
+        break;
       case 'ADMIN_DELETE_ORDER': 
         data = deleteOrder(req.eventId, req.orderId); 
         break;
@@ -456,14 +459,14 @@ function _sendOrderEmail(email, orderId, customerName, cart, totalAmount, store,
     ).join('');
 
     let titleText = "Order Processing";
-    let customIntro = `Hi ${customerName},<br>Thank you for your support. Your order and payment are being processed. If you experience any trouble with placing your order / making payment, please contact us.`;
+    let customIntro = store.emailProcessing ? store.emailProcessing.replace(/\n/g, '<br>') : `Hi ${customerName},<br>Thank you for your support. Your order and payment are being processed. If you experience any trouble with placing your order / making payment, please contact us.`;
     
     if (emailType === 'CONFIRMED') {
       titleText = "Payment Confirmed";
-      customIntro = `Hi ${customerName},<br>Payment has been confirmed. Thank you for your support!`;
+      customIntro = store.emailConfirmed ? store.emailConfirmed.replace(/\n/g, '<br>') : `Hi ${customerName},<br>Payment has been confirmed. Thank you for your support!`;
     } else if (emailType === 'UPDATE') {
-      titleText = "Updated Order Processing";
-      customIntro = store.emailIntro ? store.emailIntro.replace(/\n/g, '<br>') : `Hi ${customerName},<br>Your order has been updated.`;
+      titleText = "Updated Order";
+      customIntro = `Hi ${customerName},<br>Your order has been updated.`;
     }
 
     const customFooter = store.emailFooter ? store.emailFooter.replace(/\n/g, '<br>') : `Thank you.`;
@@ -497,7 +500,7 @@ function _sendOrderEmail(email, orderId, customerName, cart, totalAmount, store,
       </div>
     `;
 
-    MailApp.sendEmail({ to: email, subject: `${titleText}: ${orderId}`, htmlBody: htmlBody });
+    MailApp.sendEmail({ to: email, subject: `Order Update: ${orderId} - ${store.name}`, htmlBody: htmlBody });
     return "Sent";
   } catch (e) {
     return "Failed: " + e.toString();
