@@ -8,17 +8,22 @@ import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-let GAS_URL = process.env.GAS_URL;
+let GAS_URL;
 try {
   const configPath = path.join(__dirname, 'backend', 'config.js');
   if (fs.existsSync(configPath)) {
-    const config = await import('./backend/config.js');
-    if (config.GAS_URL) {
-      GAS_URL = GAS_URL || config.GAS_URL;
+    const configContent = fs.readFileSync(configPath, 'utf8');
+    const match = configContent.match(/GAS_URL\s*=\s*['"]([^'"]+)['"]/);
+    if (match && match[1]) {
+      GAS_URL = match[1];
     }
   }
 } catch(e) {
   console.log("Could not load backend/config.js", e);
+}
+
+if (!GAS_URL) {
+  console.warn("WARNING: GAS_URL is not set in backend/config.js");
 }
 
 const app = express();
