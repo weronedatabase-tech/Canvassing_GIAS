@@ -12,6 +12,24 @@ function doPost(e) {
     const req = JSON.parse(e.postData.contents);
     let data = null;
     
+    // Check Admin Password for all ADMIN_ actions
+    if (req.action && (req.action.startsWith('ADMIN_') || req.action === 'ADMIN_LOGIN')) {
+      const storedPassword = PropertiesService.getScriptProperties().getProperty("Admin Password");
+      // If property is not set, or passwords do not match, reject
+      if (!storedPassword || req.password !== storedPassword) {
+        return ContentService.createTextOutput(JSON.stringify({
+          success: false,
+          message: "Invalid Admin Password"
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      if (req.action === 'ADMIN_LOGIN') {
+        return ContentService.createTextOutput(JSON.stringify({
+          success: true
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
     switch(req.action) {
       case 'CHECK_PENDING_ORDERS':
         data = checkPendingOrders(req.orders);
