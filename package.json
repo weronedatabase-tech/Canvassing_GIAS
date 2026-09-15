@@ -15,7 +15,6 @@
   "dependencies": {
     "body-parser": "^2.3.0",
     "cors": "^2.8.6",
-    "express": "^5.2.1",
-    "qrious": "^4.0.2"
+    "express": "^5.2.1"
   }
 }

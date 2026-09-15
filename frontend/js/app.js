@@ -118,6 +118,23 @@ async function apiCall(action, payload = {}, skipLoading = false) {
 }
 
 // Router
+window.adminLogout = function() {
+    localStorage.removeItem('adminToken'); 
+    State.adminToken = null; 
+    Router.navigate('landing');
+};
+
+window.refreshAdminDashboard = async function() {
+    const container = document.getElementById('app-container');
+    const hash = window.location.hash;
+    if (hash.startsWith('#/admin/store/')) {
+        const storeId = hash.split('/').pop();
+        await renderAdminManageStore(container, storeId, true);
+    } else {
+        await renderAdminDashboard(container, true);
+    }
+};
+
 const Router = {
     navigate: (view, params = {}) => {
         let path = '/';
@@ -180,6 +197,11 @@ async function renderView(view, params = {}) {
     document.getElementById('backBtn').classList.toggle('hidden', view === 'landing');
     document.getElementById('headerCartIcon').classList.toggle('hidden', view !== 'store_shop');
     
+    const isAdminView = view.startsWith('admin_') && view !== 'admin_login';
+    document.getElementById('adminRefreshBtn').classList.toggle('hidden', !isAdminView);
+    document.getElementById('adminLogoutBtn').classList.toggle('hidden', !isAdminView);
+    document.getElementById('settingsGearIcon').classList.toggle('hidden', isAdminView);
+
     if (view.startsWith('admin_') || view === 'payment' || view === 'checkout' || view === 'landing' || view === 'store_info' || view === 'store_shop' || view === 'cart' || view === 'success') {
         container.classList.remove('max-w-lg');
         container.classList.add('w-full', 'max-w-7xl');
@@ -831,10 +853,6 @@ async function renderAdminDashboard(container, forceRefresh = false) {
         <div class="p-0 sm:p-4 fade-in pb-16">
             <div class="flex justify-between items-center mb-5 px-3 sm:px-0 pt-3 sm:pt-0">
                 <h2 class="text-2xl font-display font-bold">Dashboard</h2>
-                <div class="flex gap-3 text-sm font-semibold">
-                    <button onclick="renderAdminDashboard(document.getElementById('app-container'), true)" class="text-blue-600 hover:text-blue-700"><i class="fas fa-sync mr-1"></i> Refresh</button>
-                    <button onclick="localStorage.removeItem('adminToken'); State.adminToken = null; Router.navigate('landing')" class="text-red-500 hover:text-red-600">Logout</button>
-                </div>
             </div>
             
             <div class="mb-5 bg-white dark:bg-[#111] p-3 sm:p-5 sm:rounded-2xl shadow-sm border-y sm:border border-gray-400 dark:border-gray-800">

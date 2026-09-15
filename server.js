@@ -33,10 +33,23 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'frontend')));
 
+// Helper function to handle Google Apps Script redirects manually
+// since Node's native fetch (undici) sometimes fails on GAS 302 redirects.
+async function fetchGAS(url, options) {
+    const res = await fetch(url, { ...options, redirect: 'manual' });
+    if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get('location');
+        if (location) {
+            return fetch(location, { method: 'GET' });
+        }
+    }
+    return res;
+}
+
 // Proxy endpoint for GAS backend
 app.post('/api/gas', async (req, res) => {
   try {
-    const response = await fetch(GAS_URL, {
+    const response = await fetchGAS(GAS_URL, {
       method: 'POST',
       body: JSON.stringify(req.body),
       headers: { 'Content-Type': 'text/plain' } // GAS prefers text/plain for CORS bypassing in some cases, or application/json. 
@@ -66,12 +79,21 @@ app.post('/api/gas', async (req, res) => {
 
 app.post('/api/admin/login', async (req, res) => {
     try {
-        const response = await fetch(GAS_URL, {
+        const response = await fetchGAS(GAS_URL, {
             method: 'POST',
             body: JSON.stringify({ action: 'ADMIN_LOGIN', password: req.body.password }),
             headers: { 'Content-Type': 'text/plain' }
         });
-        const json = await response.json();
+        const text = await response.text();
+        let json;
+        try {
+            json = JSON.parse(text);
+        } catch (e) {
+            if (text.trim().startsWith('<')) {
+                throw new Error("The backend returned an HTML page instead of JSON. Ensure GAS_URL is valid and properly deployed.");
+            }
+            throw new Error("Failed to parse response from Apps Script: " + e.message);
+        }
         res.json(json);
     } catch (error) {
         console.error("Admin Login Proxy Error:", error);
