@@ -2161,7 +2161,15 @@ async function verifyPendingOrders() {
     const reqOrders = pendingOrders.map(p => ({ eventId: p.storeId, orderId: p.orderId }));
     try {
         const res = await fetch('/api/gas', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'CHECK_PENDING_ORDERS', orders: reqOrders }) });
-        const json = await res.json();
+        const text = await res.text();
+        let json;
+        try {
+            json = JSON.parse(text);
+        } catch(err) {
+            console.warn("verifyPendingOrders: Invalid JSON response");
+            return;
+        }
+        
         if (json.success && json.data) {
             const paidMap = json.data;
             let changed = false;
@@ -2181,7 +2189,7 @@ async function verifyPendingOrders() {
             }
         }
     } catch(e) {
-        console.error("verifyPendingOrders error", e);
+        console.warn("verifyPendingOrders background sync failed:", e.message);
     }
 }
 verifyPendingOrders();
