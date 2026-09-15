@@ -1623,7 +1623,7 @@ async function updateOrdStatus(eventId, orderId, status) {
 
 async function adminDeleteOrder(eventId, orderId) {
     if(!await customConfirm('Are you sure you want to permanently delete this order? It will be moved to the "Deleted Orders" tab in your Google Sheet.')) return;
-    await apiCall('CUSTOMER_CANCEL_ORDER', { eventId, orderId }, false);
+    await apiCall('ADMIN_DELETE_ORDER', { eventId, orderId });
     // Remove from cache
     State.ordersCache = State.ordersCache.filter(x => x.orderId !== orderId);
     
@@ -2016,7 +2016,7 @@ async function cancelPendingOrder(eventId, orderId) {
     
     showLoading(true, "Canceling order...");
     try {
-        await apiCall('ADMIN_DELETE_ORDER', { eventId, orderId });
+        await apiCall('CUSTOMER_CANCEL_ORDER', { eventId, orderId }, false);
         
         let pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
         pendingOrders = pendingOrders.filter(p => p.orderId !== orderId);
@@ -2069,6 +2069,10 @@ async function handlePaymentSubmit(e, orderId, name, email) {
 
 
 window.addEventListener('pageshow', (event) => {
+    if (window.location.pathname.includes('/shop') || window.location.pathname === '/cart' || window.location.pathname === '/' || window.location.pathname === '/index.html' || window.location.pathname.includes('/info')) {
+        sessionStorage.removeItem('currentOrderRef');
+    }
+
     if (event.persisted) {
         State.cart = JSON.parse(localStorage.getItem('cart')) || [];
         updateCartCount();

@@ -425,6 +425,17 @@ function submitOrder(eventId, data) {
   const ss = SpreadsheetApp.openById(sheetId);
   const sheet = ss.getSheets()[0];
   
+  // Clean up any existing rows with this order ID (in case of resubmission from checkout page)
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    for (let i = ids.length - 1; i >= 0; i--) {
+      if (ids[i] && String(ids[i]).trim() === String(orderId).trim()) {
+        sheet.deleteRow(i + 2);
+      }
+    }
+  }
+  
   // Make sure header has these columns if they're missing
   if (sheet.getLastColumn() < 13) {
       sheet.getRange(1, 12, 1, 2).setValues([["Customer Type", "Relation Name"]]);
