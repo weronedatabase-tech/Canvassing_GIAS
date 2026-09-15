@@ -126,9 +126,9 @@ window.adminLogout = function() {
 
 window.refreshAdminDashboard = async function() {
     const container = document.getElementById('app-container');
-    const hash = window.location.hash;
-    if (hash.startsWith('#/admin/store/')) {
-        const storeId = hash.split('/').pop();
+    const path = window.location.pathname;
+    if (path.startsWith('/admin/store/')) {
+        const storeId = path.split('/').pop();
         await renderAdminManageStore(container, storeId, true);
     } else {
         await renderAdminDashboard(container, true);
@@ -136,7 +136,7 @@ window.refreshAdminDashboard = async function() {
 };
 
 const Router = {
-    navigate: (view, params = {}) => {
+    navigate: async (view, params = {}) => {
         let path = '/';
         if (view === 'store_info') path = `/store/${params.id}/info`;
         else if (view === 'store_shop') path = `/store/${params.id}/shop`;
@@ -154,9 +154,12 @@ const Router = {
             path = `/success?${qs}`;
         }
         
-        window.location.href = path; // True MPA behavior
+        if (window.location.pathname + window.location.search !== path) {
+            window.history.pushState({}, '', path);
+        }
+        return await Router.init();
     },
-    init: () => {
+    init: async () => {
         const path = window.location.pathname;
         let view = 'landing';
         let params = {};
@@ -187,7 +190,7 @@ const Router = {
             params = Object.fromEntries(qs.entries());
         }
         
-        renderView(view, params);
+        return await renderView(view, params);
     }
 };
 
@@ -824,6 +827,7 @@ function togglePassword(icon, id) {
 async function handleAdminLogin(e) {
     e.preventDefault();
     const pwd = document.getElementById('adminPwd').value;
+    showLoading(true, "Authenticating...");
     try {
         const res = await fetch('/api/admin/login', {
             method: 'POST', headers: {'Content-Type':'application/json'},
@@ -840,9 +844,10 @@ async function handleAdminLogin(e) {
         if(json.success) {
             localStorage.setItem('adminToken', pwd);
             State.adminToken = pwd;
-            Router.navigate('admin_dashboard');
+            await Router.navigate('admin_dashboard');
         } else customAlert("Invalid Password");
     } catch(e) { customAlert("Login error"); }
+    finally { showLoading(false); }
 }
 
 async function renderAdminDashboard(container, forceRefresh = false) {
@@ -1729,6 +1734,9 @@ async function adminResendEmail(eventId, orderId) {
 
 // Initial Boot
 Router.init();
+window.addEventListener('popstate', () => {
+    Router.init();
+});
 
 function adminEditOrderModal(eventId, orderId) {
     const order = State.ordersCache.find(o => o.orderId === orderId);

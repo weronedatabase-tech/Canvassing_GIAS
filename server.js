@@ -37,23 +37,23 @@ app.use(express.static(path.join(__dirname, 'frontend')));
 // since Node's native fetch (undici) sometimes fails on GAS 302 redirects.
 async function fetchGAS(url, options, retries = 2) {
     for (let i = 0; i <= retries; i++) {
-        const res = await fetch(url, { ...options, redirect: 'manual' });
+        let res = await fetch(url, { ...options, redirect: 'manual' });
+        
         if (res.status >= 300 && res.status < 400) {
             const location = res.headers.get('location');
             if (location) {
-                const res2 = await fetch(location, { method: 'GET', redirect: 'follow' });
-                
-                // If it's HTML but we expect JSON, retry it
-                const contentType = res2.headers.get('content-type') || '';
-                if (contentType.includes('text/html') && i < retries) {
-                    console.log(`GAS returned HTML instead of JSON. Retrying (${i+1}/${retries})...`);
-                    await new Promise(r => setTimeout(r, 1000));
-                    continue; // Retry the whole POST request
-                }
-                
-                return res2;
+                res = await fetch(location, { method: 'GET', redirect: 'follow' });
             }
         }
+        
+        // If it's HTML but we expect JSON, retry it
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('text/html') && i < retries) {
+            console.log(`GAS returned HTML instead of JSON. Retrying (${i+1}/${retries})...`);
+            await new Promise(r => setTimeout(r, 1000));
+            continue; // Retry the whole POST request
+        }
+        
         return res;
     }
 }
