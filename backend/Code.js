@@ -244,6 +244,7 @@ function createStore(name) {
   const newStore = {
     id: newFolder.getId(),
     name: name,
+    eventType: 'online',
     isOpen: false,
     closingDate: "",
     infoHtml: "Welcome to " + name,
@@ -871,7 +872,7 @@ function updateOrderProof(eventId, orderId, customerName, email, paymentProofBas
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     imageUrl = file.getUrl();
-  } else {
+  } else if (!store.eventType || store.eventType !== 'retail') {
     throw new Error("No image provided");
   }
 

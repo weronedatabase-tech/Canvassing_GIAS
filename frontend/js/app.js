@@ -532,11 +532,55 @@ async function renderCartPage(container) {
             <div class="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-800 border-t dark:border-gray-700 z-30 flex justify-center">
                 <div class="w-full max-w-7xl flex gap-2">
                     <button onclick="Router.navigate('store_shop', {id: '${State.activeStoreId}'})" class="flex-1 bg-gray-200 dark:bg-gray-700 py-3 rounded-lg font-bold">Back</button>
-                    <button onclick="Router.navigate('checkout')" class="flex-[2] bg-green-600 text-white py-3 rounded-lg font-bold">Checkout</button>
+                    <button onclick="handleCartCheckout()" class="flex-[2] bg-green-600 text-white py-3 rounded-lg font-bold">Checkout</button>
                 </div>
             </div>
         </div>
     `;
+}
+
+async function handleCartCheckout() {
+    const store = State.masterConfig.stores.find(s => s.id === State.activeStoreId);
+    if (store && store.eventType === 'retail') {
+        showLoading(true, "Creating order...");
+        try {
+            const finalOrderId = getCheckoutOrderId(store.name);
+            const payload = {
+                orderId: finalOrderId,
+                customerName: 'Retail Customer', contact: '', email: '',
+                custType: 'Public', custRelationName: '',
+                cart: State.cart, totalAmount: parseFloat(getCartTotal()),
+                paymentProofBase64: null, mimeType: null
+            };
+            const res = await apiCall('SUBMIT_ORDER', { eventId: State.activeStoreId, order: payload });
+            const cartTotal = getCartTotal();
+            
+            let pendingOrders = JSON.parse(localStorage.getItem('pendingOrders') || '[]');
+            pendingOrders = pendingOrders.filter(p => p.storeId !== State.activeStoreId);
+            pendingOrders.push({
+                storeId: State.activeStoreId,
+                orderId: res.orderId,
+                email: '',
+                name: 'Retail Customer',
+                amount: cartTotal,
+                cart: State.cart,
+                date: Date.now()
+            });
+            localStorage.setItem('pendingOrders', JSON.stringify(pendingOrders));
+            
+            State.cart = [];
+            updateCartCount();
+            saveState();
+            
+            showLoading(false);
+            Router.navigate('payment', { orderId: res.orderId, email: '', amount: cartTotal, name: 'Retail Customer' });
+        } catch (e) {
+            showLoading(false);
+            alert(e.message);
+        }
+    } else {
+        Router.navigate('checkout');
+    }
 }
 
 // Generate SGQR PayNow String
@@ -941,6 +985,13 @@ async function manageStore(storeId, initialTab = 'info') {
                     <input type="text" id="stName" value="${config.name || ''}" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg dark:bg-[#1a1a1a] text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all">
                 </div>
                 <div>
+                    <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Store Type</label>
+                    <select id="stEventType" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg dark:bg-[#1a1a1a] text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all">
+                        <option value="online" ${(!config.eventType || config.eventType === 'online') ? 'selected' : ''}>Online Store (Collect Later)</option>
+                        <option value="retail" ${(config.eventType === 'retail') ? 'selected' : ''}>Retail Store (In Person)</option>
+                    </select>
+                </div>
+                <div>
                     <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Closing Date</label>
                     <input type="date" id="stClose" value="${config.closingDate ? config.closingDate.split('T')[0] : ''}" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg dark:bg-[#1a1a1a] text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all">
                 </div>
@@ -1160,6 +1211,7 @@ async function saveStoreSettings(id) {
     const payload = {
         id,
         name: document.getElementById('stName').value,
+        eventType: document.getElementById('stEventType').value,
         closingDate: document.getElementById('stClose').value,
         paynowNumber: document.getElementById('stPaynow').value,
         infoHtml: infoHtml,
@@ -1968,15 +2020,19 @@ async function renderPaymentPage(container, params) {
         `;
     }
 
+    const isRetail = store.eventType === 'retail';
+    
     container.innerHTML = `
         <div class="p-4 fade-in pb-10 max-w-4xl mx-auto">
             <h2 class="text-xl font-bold mb-4">Complete Payment</h2>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                 <div>
+                    ${!isRetail ? `
                     <div class="bg-blue-50 dark:bg-blue-900/30 p-3 mb-4 rounded border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-300">
                         <i class="fas fa-info-circle mr-1"></i> Please make your payment using the QR code below and upload the screenshot here. You will receive an email confirmation once the screenshot is uploaded. If you lose this page before uploading, open the fundraising link again to see a notification to bring you back to this page. Alternatively, you can also WhatsApp the payment screenshot to <strong>83282989</strong>.
                     </div>
+                    ` : ''}
                     
                     ${summaryHtml}
                 </div>
@@ -1996,12 +2052,12 @@ async function renderPaymentPage(container, params) {
                         </div>
                         
                         <div class="mt-4">
-                            <label class="block text-sm font-extrabold text-blue-700 dark:text-blue-400 uppercase mb-1">Upload Successful Payment Screenshot</label>
-                            <input type="file" id="paymentProof" accept="image/*" required class="w-full text-sm">
+                            <label class="block text-sm font-extrabold text-blue-700 dark:text-blue-400 uppercase mb-1">${isRetail ? 'Upload Successful Payment Screenshot (Optional)' : 'Upload Successful Payment Screenshot'}</label>
+                            <input type="file" id="paymentProof" accept="image/*" ${isRetail ? '' : 'required'} class="w-full text-sm">
                         </div>
                     </div>
                     
-                    <button type="submit" id="submitPaymentBtn" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg transition-transform active:scale-95">Submit Payment Proof</button>
+                    <button type="submit" id="submitPaymentBtn" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg transition-transform active:scale-95">${isRetail ? 'Confirm Order' : 'Submit Payment Proof'}</button>
                     <button type="button" onclick="cancelPendingOrder('${State.activeStoreId}', '${escapeHTML(params.orderId)}')" class="w-full mt-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 py-2 rounded-lg font-bold transition-colors">Cancel Order</button>
                 </form>
             </div>
