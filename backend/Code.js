@@ -889,6 +889,9 @@ function updateOrderProof(eventId, orderId, customerName, email, paymentProofBas
     let totalAmount = 0;
     for (let i = 1; i < data.length; i++) {
       if (data[i][0] == orderId) {
+        if (email && email.includes('@')) {
+            sheet.getRange(i + 1, 9).setValue(email);
+        }
         sheet.getRange(i + 1, 10).setValue(imageUrl);
         sheet.getRange(i + 1, 11).setValue("Pending");
         cart.push({

@@ -770,7 +770,7 @@ async function renderSuccess(container, params) {
             <div class="bg-green-100 dark:bg-green-900 p-4 rounded-full mb-4"><i class="fas fa-check text-4xl text-green-600 dark:text-green-400"></i></div>
             <h2 class="text-2xl font-bold mb-2">Order Submitted!</h2>
             <p class="mb-4">Order ID: <span class="font-mono font-bold">${escapeHTML(params.orderId)}</span></p>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">Confirmation sent to ${escapeHTML(params.email)}</p>
+            ${params.email ? `<p class="text-sm text-gray-600 dark:text-gray-400 mb-6">Confirmation sent to ${escapeHTML(params.email)}</p>` : ''}
             <button onclick="Router.navigate('landing')" class="text-blue-600 font-bold hover:underline">Back to Home</button>
         </div>
     `;
@@ -2055,6 +2055,13 @@ async function renderPaymentPage(container, params) {
                             <label class="block text-sm font-extrabold text-blue-700 dark:text-blue-400 uppercase mb-1">${isRetail ? 'Upload Successful Payment Screenshot (Optional)' : 'Upload Successful Payment Screenshot'}</label>
                             <input type="file" id="paymentProof" accept="image/*" ${isRetail ? '' : 'required'} class="w-full text-sm">
                         </div>
+                        
+                        ${isRetail ? `
+                        <div class="mt-4 pt-4 border-t border-gray-300 dark:border-gray-700">
+                            <label class="block text-sm font-extrabold text-blue-700 dark:text-blue-400 uppercase mb-1">Send Receipt To Email (Optional)</label>
+                            <input type="email" id="retailEmail" placeholder="Enter email to receive order summary" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg dark:bg-[#1a1a1a] text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all">
+                        </div>
+                        ` : ''}
                     </div>
                     
                     <button type="submit" id="submitPaymentBtn" class="w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg transition-transform active:scale-95">${isRetail ? 'Confirm Order' : 'Submit Payment Proof'}</button>
@@ -2091,9 +2098,15 @@ async function cancelPendingOrder(eventId, orderId) {
     }
 }
 
-async function handlePaymentSubmit(e, orderId, name, email) {
+async function handlePaymentSubmit(e, orderId, name, emailParam) {
     e.preventDefault();
     const fileInput = document.getElementById('paymentProof');
+    const retailEmailInput = document.getElementById('retailEmail');
+    let email = emailParam;
+    
+    if (retailEmailInput && retailEmailInput.value.trim() !== '') {
+        email = retailEmailInput.value.trim();
+    }
     
     let paymentProofBase64 = null, mimeType = null;
     if(fileInput.files.length > 0) {
