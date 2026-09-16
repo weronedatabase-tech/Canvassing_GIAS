@@ -114,7 +114,27 @@ function getMasterConfig() {
   const root = getRootFolder();
   const files = root.getFilesByName("master_config.json");
   if (files.hasNext()) {
-    return JSON.parse(files.next().getBlob().getDataAsString());
+    let config = JSON.parse(files.next().getBlob().getDataAsString());
+    let modified = false;
+    if (config.stores) {
+      config.stores.forEach(s => {
+        const keysToRemove = [
+          'imageBase64', 'mimeType', 
+          'summaryImageBase64', 'summaryImageMimeType',
+          'summaryPdfBase64', 'summaryPdfMimeType'
+        ];
+        keysToRemove.forEach(k => {
+          if (s[k]) {
+            delete s[k];
+            modified = true;
+          }
+        });
+      });
+    }
+    if (modified) {
+      saveMasterConfig(config);
+    }
+    return config;
   }
   
   // Migration / Init
@@ -286,7 +306,20 @@ function getStoreProducts(eventId) {
   
   const pFiles = pFolder.getFilesByName("products.json");
   if (pFiles.hasNext()) {
-    return JSON.parse(pFiles.next().getBlob().getDataAsString());
+    let pFile = pFiles.next();
+    let products = JSON.parse(pFile.getBlob().getDataAsString());
+    let modified = false;
+    products.forEach(p => {
+        if (p.imageBase64 || p.mimeType) {
+            delete p.imageBase64;
+            delete p.mimeType;
+            modified = true;
+        }
+    });
+    if (modified) {
+        pFile.setContent(JSON.stringify(products));
+    }
+    return products;
   }
   
   // Migration from legacy

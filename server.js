@@ -41,6 +41,8 @@ async function fetchGAS(url, options, retries = 2) {
         
         if (res.status >= 300 && res.status < 400) {
             const location = res.headers.get('location');
+            // Consume body to free socket in Node.js
+            try { await res.arrayBuffer(); } catch(e) {}
             if (location) {
                 res = await fetch(location, { method: 'GET', redirect: 'follow' });
             }
@@ -71,6 +73,21 @@ app.post('/api/gas', async (req, res) => {
     let data;
     try {
       data = JSON.parse(text);
+      if (req.body && req.body.action === 'INIT' && data && data.data && data.data.stores) {
+          data.data.stores.forEach(s => {
+              delete s.imageBase64;
+              delete s.mimeType;
+              delete s.summaryImageBase64;
+              delete s.summaryImageMimeType;
+              delete s.summaryPdfBase64;
+              delete s.summaryPdfMimeType;
+          });
+      } else if (req.body && req.body.action === 'GET_STORE' && data && Array.isArray(data.data)) {
+          data.data.forEach(p => {
+              delete p.imageBase64;
+              delete p.mimeType;
+          });
+      }
     } catch (e) {
       if (text.trim().startsWith('<')) {
         let hint = "This usually means your Google Apps Script Web App is misconfigured. Ensure it is deployed with 'Execute as: Me' and 'Who has access: Anyone'.";
