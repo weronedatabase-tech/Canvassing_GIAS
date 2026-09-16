@@ -424,24 +424,24 @@ async function renderStoreShop(container, storeId) {
                 ${State.products.length === 0 ? '<p>No items.</p>' : State.products.map(p => {
                     const inCart = State.cart.find(c => c.id === p.id);
                     const qtyHtml = inCart 
-                        ? `<div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded-lg border border-blue-100 dark:border-gray-600">
-                            <button onclick="updateQty('${p.id}', -1)" class="w-10 h-10 font-bold text-xl text-blue-600 dark:text-blue-400">-</button>
-                            <span class="w-8 text-center font-bold" id="qty-${p.id}">${inCart.qty}</span>
-                            <button onclick="updateQty('${p.id}', 1)" class="w-10 h-10 font-bold text-xl text-blue-600 dark:text-blue-400">+</button>
+                        ? `<div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded-md border border-blue-100 dark:border-gray-600 h-8 w-fit shrink-0">
+                            <button onclick="updateQty('${p.id}', -1)" class="w-8 h-8 flex items-center justify-center font-bold text-lg text-blue-600 dark:text-blue-400">-</button>
+                            <span class="w-6 text-center font-semibold text-sm" id="qty-${p.id}">${inCart.qty}</span>
+                            <button onclick="updateQty('${p.id}', 1)" class="w-8 h-8 flex items-center justify-center font-bold text-lg text-blue-600 dark:text-blue-400">+</button>
                            </div>`
-                        : `<button onclick="updateQty('${p.id}', 1)" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">Add to Cart</button>`;
+                        : `<button onclick="updateQty('${p.id}', 1)" class="bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm font-semibold transition-transform hover:scale-[1.02] active:scale-95 whitespace-nowrap shrink-0">Add to Cart</button>`;
 
                     return `
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-3 flex gap-3 border dark:border-gray-700">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-3 flex gap-3 border dark:border-gray-700 h-full">
                         ${p.imageId ? `<img src="https://lh3.googleusercontent.com/d/${p.imageId}" class="w-24 h-24 shrink-0 self-start object-cover rounded-md">` : '<div class="w-24 h-24 shrink-0 self-start bg-gray-200 dark:bg-gray-700 rounded-md flex items-center justify-center text-gray-400">No Image</div>'}
-                        <div class="flex-1 min-w-0 flex flex-col justify-between">
+                        <div class="flex-1 min-w-0 flex flex-col justify-between h-full">
                             <div>
                                 <h3 class="font-bold text-lg leading-tight dark:text-white break-words">${escapeHTML(p.name)}</h3>
                                 <p class="text-xs text-gray-700 dark:text-gray-400 mt-1 break-words whitespace-pre-wrap">${escapeHTML(p.description || '')}</p>
                             </div>
-                            <div class="flex justify-between items-end mt-2">
+                            <div class="flex justify-between items-end mt-3 gap-2 flex-wrap">
                                 <span class="font-bold text-blue-600 dark:text-blue-400 text-lg">$${p.price.toFixed(2)}</span>
-                                <div id="btn-container-${p.id}">${qtyHtml}</div>
+                                <div id="btn-container-${p.id}" class="shrink-0 flex items-center">${qtyHtml}</div>
                             </div>
                         </div>
                     </div>`
@@ -495,12 +495,12 @@ function updateQty(id, delta) {
     if (btnContainer) {
         const inCart = State.cart.find(c => c.id === id);
         btnContainer.innerHTML = inCart 
-            ? `<div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded-lg border border-blue-100 dark:border-gray-600">
-                <button onclick="updateQty('${id}', -1)" class="w-10 h-10 font-bold text-xl text-blue-600 dark:text-blue-400">-</button>
-                <span class="w-8 text-center font-bold">${inCart.qty}</span>
-                <button onclick="updateQty('${id}', 1)" class="w-10 h-10 font-bold text-xl text-blue-600 dark:text-blue-400">+</button>
+            ? `<div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded-md border border-blue-100 dark:border-gray-600 h-8 w-fit shrink-0">
+                <button onclick="updateQty('${id}', -1)" class="w-8 h-8 flex items-center justify-center font-bold text-lg text-blue-600 dark:text-blue-400">-</button>
+                <span class="w-6 text-center font-semibold text-sm">${inCart.qty}</span>
+                <button onclick="updateQty('${id}', 1)" class="w-8 h-8 flex items-center justify-center font-bold text-lg text-blue-600 dark:text-blue-400">+</button>
                </div>`
-            : `<button onclick="updateQty('${id}', 1)" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">Add to Cart</button>`;
+            : `<button onclick="updateQty('${id}', 1)" class="bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm font-semibold transition-transform hover:scale-[1.02] active:scale-95 whitespace-nowrap shrink-0">Add to Cart</button>`;
     }
     
     // Re-render cart page completely if we are currently on it
@@ -2178,12 +2178,12 @@ window.addEventListener('pageshow', (event) => {
                 if (btnContainer) {
                     const inCart = State.cart.find(c => c.id === p.id);
                     btnContainer.innerHTML = inCart 
-                        ? `<div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded-lg border border-blue-100 dark:border-gray-600">
-                            <button onclick="updateQty('${p.id}', -1)" class="w-10 h-10 font-bold text-xl text-blue-600 dark:text-blue-400">-</button>
-                            <span class="w-8 text-center font-bold" id="qty-${p.id}">${inCart.qty}</span>
-                            <button onclick="updateQty('${p.id}', 1)" class="w-10 h-10 font-bold text-xl text-blue-600 dark:text-blue-400">+</button>
+                        ? `<div class="flex items-center bg-blue-50 dark:bg-gray-700 rounded-md border border-blue-100 dark:border-gray-600 h-8 w-fit shrink-0">
+                            <button onclick="updateQty('${p.id}', -1)" class="w-8 h-8 flex items-center justify-center font-bold text-lg text-blue-600 dark:text-blue-400">-</button>
+                            <span class="w-6 text-center font-semibold text-sm" id="qty-${p.id}">${inCart.qty}</span>
+                            <button onclick="updateQty('${p.id}', 1)" class="w-8 h-8 flex items-center justify-center font-bold text-lg text-blue-600 dark:text-blue-400">+</button>
                            </div>`
-                        : `<button onclick="updateQty('${p.id}', 1)" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">Add to Cart</button>`;
+                        : `<button onclick="updateQty('${p.id}', 1)" class="bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm font-semibold transition-transform hover:scale-[1.02] active:scale-95 whitespace-nowrap shrink-0">Add to Cart</button>`;
                 }
             });
             const totalEl = document.getElementById('bottomTotal');
