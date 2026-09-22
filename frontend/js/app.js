@@ -125,15 +125,61 @@ window.adminLogout = function() {
 };
 
 window.refreshAdminDashboard = async function() {
-    const container = document.getElementById('app-container');
-    const path = window.location.pathname;
-    if (path.startsWith('/admin/store/')) {
-        const storeId = path.split('/').pop();
-        await renderAdminManageStore(container, storeId, true);
-    } else {
-        await renderAdminDashboard(container, true);
+    const btn = document.getElementById('adminRefreshBtn');
+    const icon = btn?.querySelector('i');
+    if (icon) icon.classList.add('fa-spin');
+    if (btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'pointer-events-none');
+    }
+
+    try {
+        const container = document.getElementById('app-container');
+        const path = window.location.pathname;
+
+        if (path.startsWith('/admin/store/')) {
+            const storeId = path.split('/').pop();
+            const activeTab = ['info', 'products', 'orders', 'summary'].find(t => {
+                const el = document.getElementById('panel-' + t);
+                return el && !el.classList.contains('hidden');
+            }) || 'orders';
+
+            const currentSearch = document.getElementById('orderSearch')?.value || '';
+            const currentFilter = document.getElementById('orderFilter')?.value || 'all';
+
+            await loadMasterConfig(true);
+            await manageStore(storeId, activeTab);
+
+            if (activeTab === 'orders') {
+                const searchInput = document.getElementById('orderSearch');
+                const filterSelect = document.getElementById('orderFilter');
+                if (searchInput && currentSearch) {
+                    searchInput.value = currentSearch;
+                }
+                if (filterSelect && currentFilter !== 'all') {
+                    filterSelect.value = currentFilter;
+                }
+                if (typeof filterAdminOrders === 'function') {
+                    filterAdminOrders();
+                }
+            }
+        } else {
+            await loadMasterConfig(true);
+            await renderAdminDashboard(container, true);
+        }
+    } catch (e) {
+        console.error("Dashboard refresh error:", e);
+        customAlert("Failed to refresh: " + (e.message || e));
+    } finally {
+        if (icon) icon.classList.remove('fa-spin');
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove('opacity-50', 'pointer-events-none');
+        }
     }
 };
+
+window.refreshOrdersFromSheet = window.refreshAdminDashboard;
 
 const Router = {
     navigate: async (view, params = {}) => {
@@ -256,7 +302,36 @@ function isStoreOpen(store) {
     return true;
 }
 
+let appEnvPromise = null;
+async function getAppEnv() {
+    if (!appEnvPromise) {
+        appEnvPromise = fetch('/api/env')
+            .then(res => res.json())
+            .then(data => {
+                const env = data.env || 'Prod';
+                const cachedEnv = sessionStorage.getItem('active_env');
+                if (cachedEnv && cachedEnv !== env) {
+                    console.log(`Environment switched from ${cachedEnv} to ${env}. Clearing cached config.`);
+                    sessionStorage.removeItem('masterConfig');
+                    sessionStorage.removeItem('activeStoreId');
+                    State.masterConfig = null;
+                    State.activeStoreId = null;
+                }
+                sessionStorage.setItem('active_env', env);
+                const banner = document.getElementById('experimentationBanner');
+                if (banner) {
+                    if (env === 'Exp') banner.classList.remove('hidden');
+                    else banner.classList.add('hidden');
+                }
+                return env;
+            })
+            .catch(() => 'Prod');
+    }
+    return appEnvPromise;
+}
+
 async function loadMasterConfig(force = false) {
+    await getAppEnv();
     if (!State.masterConfig || force) {
         State.masterConfig = await apiCall('INIT');
         saveState();
@@ -1178,7 +1253,7 @@ async function manageStore(storeId, initialTab = 'info') {
                 <div class="relative mb-4 flex gap-2">
                     <div class="relative flex-1">
                         <i class="fas fa-search absolute left-3 top-3.5 text-gray-400 text-sm"></i>
-                        <input type="text" id="orderSearch" onkeyup="filterAdminOrders()" placeholder="Search Name, Phone, ID..." class="w-full px-9 py-3 border border-gray-400 dark:border-gray-800 rounded-lg text-sm dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-gray-900 transition-all">
+                        <input type="text" id="orderSearch" onkeyup="filterAdminOrders()" placeholder="Search Name, Phone, ID, Remark..." class="w-full px-9 py-3 border border-gray-400 dark:border-gray-800 rounded-lg text-sm dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-gray-900 transition-all">
                         <button onclick="document.getElementById('orderSearch').value=''; filterAdminOrders();" class="absolute right-3 top-3.5 text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors" title="Clear Search"><i class="fas fa-times"></i></button>
                     </div>
                     <select id="orderFilter" onchange="filterAdminOrders()" class="p-3 border border-gray-400 dark:border-gray-800 rounded-lg text-sm dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-gray-900 transition-all w-32 shrink-0">
@@ -1460,10 +1535,10 @@ function renderOrderRemarkContent(storeId, orderId, remarks) {
                         <i class="fas fa-sticky-note text-amber-600 dark:text-amber-400"></i> Remarks
                     </span>
                     <div class="flex items-center gap-2">
-                        <button type="button" onclick="startEditRemark('${storeId}', '${escapedOrderId}')" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-semibold text-[11px] flex items-center gap-1 hover:underline transition-colors" title="Edit Remarks">
+                        <button type="button" id="btn-edit-remark-${escapeHTML(orderId)}" onclick="startEditRemark('${storeId}', '${escapedOrderId}')" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-semibold text-[11px] flex items-center gap-1 hover:underline transition-colors" title="Edit Remarks">
                             <i class="fas fa-edit text-[10px]"></i> Edit
                         </button>
-                        <button type="button" onclick="deleteRemark('${storeId}', '${escapedOrderId}')" class="text-red-600 hover:text-red-700 dark:text-red-400 font-semibold text-[11px] flex items-center gap-1 hover:underline transition-colors" title="Delete Remarks">
+                        <button type="button" id="btn-delete-remark-${escapeHTML(orderId)}" onclick="deleteRemark('${storeId}', '${escapedOrderId}')" class="text-red-600 hover:text-red-700 dark:text-red-400 font-semibold text-[11px] flex items-center gap-1 hover:underline transition-colors" title="Delete Remarks">
                             <i class="fas fa-trash-alt text-[10px]"></i> Delete
                         </button>
                     </div>
@@ -1496,10 +1571,10 @@ function startEditRemark(storeId, orderId) {
             </div>
             <textarea id="remark-input-${escapeHTML(orderId)}" class="w-full p-2 text-xs rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300 break-words resize-y" rows="3" placeholder="Enter order remarks (visible only to admins)...">${escapeHTML(currentRemark)}</textarea>
             <div class="flex justify-end gap-2 mt-2">
-                <button type="button" onclick="cancelEditRemark('${storeId}', '${escapedOrderId}')" class="px-3 py-1 rounded-lg text-xs font-semibold bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors">
+                <button type="button" id="btn-cancel-remark-${escapeHTML(orderId)}" onclick="cancelEditRemark('${storeId}', '${escapedOrderId}')" class="px-3 py-1 rounded-lg text-xs font-semibold bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors">
                     Cancel
                 </button>
-                <button type="button" onclick="saveRemark('${storeId}', '${escapedOrderId}')" class="px-3 py-1 rounded-lg text-xs font-bold bg-gray-900 hover:bg-black text-white dark:bg-white dark:hover:bg-gray-200 dark:text-black transition-colors flex items-center gap-1">
+                <button type="button" id="btn-save-remark-${escapeHTML(orderId)}" onclick="saveRemark('${storeId}', '${escapedOrderId}')" class="px-3 py-1 rounded-lg text-xs font-bold bg-gray-900 hover:bg-black text-white dark:bg-white dark:hover:bg-gray-200 dark:text-black transition-colors flex items-center gap-1.5">
                     <i class="fas fa-check text-[10px]"></i> Save
                 </button>
             </div>
@@ -1522,6 +1597,8 @@ function cancelEditRemark(storeId, orderId) {
 async function saveRemark(storeId, orderId) {
     const input = document.getElementById(`remark-input-${orderId}`);
     if (!input) return;
+    const saveBtn = document.getElementById(`btn-save-remark-${orderId}`);
+    const cancelBtn = document.getElementById(`btn-cancel-remark-${orderId}`);
     const newRemarks = input.value.trim();
     const order = State.ordersCache.find(o => o.orderId === orderId);
     const oldRemarks = (order && order.remarks) ? order.remarks.trim() : '';
@@ -1530,6 +1607,14 @@ async function saveRemark(storeId, orderId) {
         cancelEditRemark(storeId, orderId);
         return;
     }
+
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin text-[10px]"></i> Saving...';
+        saveBtn.classList.add('opacity-75', 'cursor-not-allowed');
+    }
+    if (cancelBtn) cancelBtn.disabled = true;
+    input.disabled = true;
 
     try {
         await apiCall('ADMIN_UPDATE_ORDER_REMARKS', { eventId: storeId, orderId: orderId, remarks: newRemarks }, true);
@@ -1543,7 +1628,14 @@ async function saveRemark(storeId, orderId) {
             card.setAttribute('data-search', `${(order.customer || '').toLowerCase()} ${order.contact || ''} ${(order.orderId || '').toLowerCase()} ${(newRemarks || '').toLowerCase()}`);
         }
     } catch(err) {
-        // Handled in apiCall
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-check text-[10px]"></i> Save';
+            saveBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+        }
+        if (cancelBtn) cancelBtn.disabled = false;
+        input.disabled = false;
+        customAlert("Failed to save remarks to sheet: " + err.message);
     }
 }
 
@@ -1551,6 +1643,19 @@ async function deleteRemark(storeId, orderId) {
     if (!await customConfirm("Are you sure you want to delete the remarks for this order?")) {
         return;
     }
+    const deleteBtn = document.getElementById(`btn-delete-remark-${orderId}`);
+    const editBtn = document.getElementById(`btn-edit-remark-${orderId}`);
+
+    if (deleteBtn) {
+        deleteBtn.disabled = true;
+        deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin text-[10px]"></i> Deleting...';
+        deleteBtn.classList.add('opacity-75', 'cursor-not-allowed');
+    }
+    if (editBtn) {
+        editBtn.disabled = true;
+        editBtn.classList.add('opacity-50', 'pointer-events-none');
+    }
+
     try {
         await apiCall('ADMIN_UPDATE_ORDER_REMARKS', { eventId: storeId, orderId: orderId, remarks: "" }, true);
         const order = State.ordersCache.find(o => o.orderId === orderId);
@@ -1564,7 +1669,16 @@ async function deleteRemark(storeId, orderId) {
             card.setAttribute('data-search', `${(order.customer || '').toLowerCase()} ${order.contact || ''} ${(order.orderId || '').toLowerCase()}`);
         }
     } catch(err) {
-        // Handled in apiCall
+        if (deleteBtn) {
+            deleteBtn.disabled = false;
+            deleteBtn.innerHTML = '<i class="fas fa-trash-alt text-[10px]"></i> Delete';
+            deleteBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+        }
+        if (editBtn) {
+            editBtn.disabled = false;
+            editBtn.classList.remove('opacity-50', 'pointer-events-none');
+        }
+        customAlert("Failed to delete remarks from sheet: " + err.message);
     }
 }
 

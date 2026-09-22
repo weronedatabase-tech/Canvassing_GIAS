@@ -41,12 +41,13 @@ app.use(express.static(path.join(__dirname, 'frontend')));
 
 // Helper function to handle Google Apps Script redirects manually
 // since Node's native fetch (undici) sometimes fails on GAS 302 redirects.
-async function fetchGAS(url, options, retries = 2, timeoutMs = 25000) {
+async function fetchGAS(url, options, retries = 2, timeoutMs = 60000) {
     let lastError = null;
     for (let i = 0; i <= retries; i++) {
         let timer = null;
+        let controller = null;
         try {
-            const controller = new AbortController();
+            controller = new AbortController();
             timer = setTimeout(() => controller.abort(), timeoutMs);
 
             let res = await fetch(url, { ...options, redirect: 'manual', signal: controller.signal });
@@ -55,17 +56,26 @@ async function fetchGAS(url, options, retries = 2, timeoutMs = 25000) {
                 const location = res.headers.get('location');
                 // Consume body to free socket in Node.js
                 try { await res.arrayBuffer(); } catch(e) {}
+                if (timer) clearTimeout(timer);
+
                 if (location) {
-                    res = await fetch(location, { method: 'GET', redirect: 'follow', signal: controller.signal });
+                    const redirectController = new AbortController();
+                    const redirectTimer = setTimeout(() => redirectController.abort(), timeoutMs);
+                    try {
+                        res = await fetch(location, { method: 'GET', redirect: 'follow', signal: redirectController.signal });
+                    } finally {
+                        clearTimeout(redirectTimer);
+                    }
                 }
+            } else {
+                if (timer) clearTimeout(timer);
             }
-            if (timer) clearTimeout(timer);
             
             // If it's HTML but we expect JSON, retry it
             const contentType = res.headers.get('content-type') || '';
             if (contentType.includes('text/html') && i < retries) {
                 console.log(`GAS returned HTML instead of JSON. Retrying (${i+1}/${retries})...`);
-                await new Promise(r => setTimeout(r, 800));
+                await new Promise(r => setTimeout(r, 1500));
                 continue; // Retry the whole POST request
             }
             
@@ -73,9 +83,11 @@ async function fetchGAS(url, options, retries = 2, timeoutMs = 25000) {
         } catch (err) {
             if (timer) clearTimeout(timer);
             lastError = err;
-            console.warn(`GAS request attempt ${i+1}/${retries+1} failed: ${err.message}`);
+            const isAbort = err.name === 'AbortError' || err.message?.includes('aborted');
+            console.warn(`GAS request attempt ${i+1}/${retries+1} failed: ${err.message}${isAbort ? ` (timed out after ${timeoutMs}ms)` : ''}`);
             if (i < retries) {
-                await new Promise(r => setTimeout(r, 800));
+                const waitTime = isAbort ? 2000 : 1000;
+                await new Promise(r => setTimeout(r, waitTime));
                 continue;
             }
             throw err;
@@ -146,15 +158,24 @@ app.post('/api/gas', async (req, res) => {
       throw new Error("Failed to parse response from Apps Script: " + e.message);
     }
     
+    if (req.body && req.body.action === 'INIT' && data && data.success) {
+      try {
+        fs.writeFileSync(path.join(__dirname, `init_${APP_ENV}.json`), JSON.stringify(data, null, 2));
+        fs.writeFileSync(path.join(__dirname, 'init.json'), JSON.stringify(data, null, 2));
+      } catch (saveErr) {}
+    }
+    
     res.json(data);
   } catch (error) {
     console.error("GAS Proxy Error:", error);
     if (req.body && req.body.action === 'INIT') {
       try {
+        const envInitPath = path.join(__dirname, `init_${APP_ENV}.json`);
         const initPath = path.join(__dirname, 'init.json');
-        if (fs.existsSync(initPath)) {
-          console.log("Serving cached fallback init.json");
-          const initData = JSON.parse(fs.readFileSync(initPath, 'utf8'));
+        const pathToUse = fs.existsSync(envInitPath) ? envInitPath : (fs.existsSync(initPath) ? initPath : null);
+        if (pathToUse) {
+          console.log(`Serving cached fallback ${path.basename(pathToUse)}`);
+          const initData = JSON.parse(fs.readFileSync(pathToUse, 'utf8'));
           return res.json(initData);
         }
       } catch (err) {

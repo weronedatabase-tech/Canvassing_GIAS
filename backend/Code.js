@@ -119,10 +119,10 @@ function doPost(e) {
 
 function getRootFolder() {
   var id = null;
-  if (typeof ROOT_FOLDER_ID !== 'undefined' && ROOT_FOLDER_ID) {
-    id = ROOT_FOLDER_ID;
-  } else if (_activeRootFolderId) {
+  if (_activeRootFolderId) {
     id = _activeRootFolderId;
+  } else if (typeof ROOT_FOLDER_ID !== 'undefined' && ROOT_FOLDER_ID) {
+    id = ROOT_FOLDER_ID;
   } else if (typeof CONFIG !== 'undefined' && typeof APP_ENV !== 'undefined' && CONFIG[APP_ENV]) {
     id = CONFIG[APP_ENV].ROOT_FOLDER_ID;
   }
@@ -602,25 +602,83 @@ function getOrders(eventId) {
   if (lastRow < 2) return []; 
   
   const lastCol = Math.max(sheet.getLastColumn(), 15); 
+  const headerRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  
+  // Ensure Payment Confirmed & Remarks headers exist
+  if (!headerRow.some(h => /payment.*confirm|paid/i.test(String(h)))) {
+    sheet.getRange(1, 14).setValue("Payment Confirmed");
+    headerRow[13] = "Payment Confirmed";
+  }
+  if (!headerRow.some(h => /remark|notes?/i.test(String(h)))) {
+    sheet.getRange(1, 15).setValue("Remarks");
+    headerRow[14] = "Remarks";
+  }
+
+  const findCol = (regex, fallback) => {
+    const idx = headerRow.findIndex(h => regex.test(String(h).trim()));
+    return idx >= 0 ? idx : fallback;
+  };
+
+  const idCol = findCol(/order\s*id/i, 0);
+  const dateCol = findCol(/^date/i, 1);
+  const itemCol = findCol(/item\s*name|^item$/i, 2);
+  const priceCol = findCol(/price|unit\s*price/i, 3);
+  const qtyCol = findCol(/qty|quantity/i, 4);
+  const totalCol = findCol(/^total|subtotal/i, 5);
+  const custCol = findCol(/customer\s*name|^customer$/i, 6);
+  const contactCol = findCol(/contact|phone|mobile/i, 7);
+  const emailCol = findCol(/email/i, 8);
+  const imgCol = findCol(/image|receipt|proof/i, 9);
+  const statusCol = findCol(/status/i, 10);
+  const typeCol = findCol(/customer\s*type|custtype/i, 11);
+  const relCol = findCol(/relation/i, 12);
+  const payCol = findCol(/payment.*confirm|paid/i, 13);
+  const remarksCol = findCol(/remark|notes?/i, 14);
+
   const range = sheet.getRange(2, 1, lastRow - 1, lastCol);
   const data = range.getValues();
   
   const orders = {};
   data.forEach(row => {
-    const id = row[0];
-    if (!orders[id]) {
-       orders[id] = {
-         orderId: id, date: row[1], customer: row[6], contact: row[7],
-         email: row[8], imageUrl: row[9], status: row[10] || "Pending",
-         custType: row[11] || "", custRelationName: row[12] || "",
-         paymentConfirmed: row[13] === true || String(row[13]).toLowerCase() === 'true',
-         remarks: (row[14] !== undefined && row[14] !== null) ? String(row[14]) : "",
-         items: [], total: 0
+    const id = row[idCol];
+    if (!id || String(id).trim() === "" || String(id).trim().toLowerCase() === "order id") return;
+    const cleanId = String(id).trim();
+
+    const isPaid = row[payCol] === true || String(row[payCol]).toLowerCase() === 'true' || String(row[payCol]).toLowerCase() === 'yes';
+    const remarkVal = (row[remarksCol] !== undefined && row[remarksCol] !== null) ? String(row[remarksCol]).trim() : "";
+
+    if (!orders[cleanId]) {
+       orders[cleanId] = {
+         orderId: cleanId, 
+         date: row[dateCol], 
+         customer: row[custCol] || "", 
+         contact: row[contactCol] ? String(row[contactCol]).replace(/^'/, '') : "",
+         email: row[emailCol] || "", 
+         imageUrl: row[imgCol] || "No Image", 
+         status: row[statusCol] || "Pending",
+         custType: row[typeCol] || "", 
+         custRelationName: row[relCol] || "",
+         paymentConfirmed: isPaid,
+         remarks: remarkVal,
+         items: [], 
+         total: 0
        };
+    } else {
+       // If admin updated fields on another row for this order in the sheet, reflect them!
+       if (row[custCol] && !orders[cleanId].customer) orders[cleanId].customer = row[custCol];
+       if (row[contactCol] && !orders[cleanId].contact) orders[cleanId].contact = String(row[contactCol]).replace(/^'/, '');
+       if (row[emailCol] && !orders[cleanId].email) orders[cleanId].email = row[emailCol];
+       if (row[statusCol] && orders[cleanId].status === "Pending") orders[cleanId].status = row[statusCol];
+       if (isPaid && !orders[cleanId].paymentConfirmed) orders[cleanId].paymentConfirmed = true;
+       if (remarkVal && !orders[cleanId].remarks) orders[cleanId].remarks = remarkVal;
     }
-    const itemTotal = parseFloat(row[5]) || 0;
-    orders[id].items.push({ name: row[2], price: row[3], qty: row[4], total: itemTotal });
-    orders[id].total += itemTotal;
+    const priceVal = parseFloat(row[priceCol]) || 0;
+    const qtyVal = parseInt(row[qtyCol]) || 0;
+    const itemTotal = parseFloat(row[totalCol]) || (priceVal * qtyVal) || 0;
+    if (row[itemCol] || qtyVal > 0) {
+      orders[cleanId].items.push({ name: row[itemCol] || "Item", price: priceVal, qty: qtyVal, total: itemTotal });
+      orders[cleanId].total += itemTotal;
+    }
   });
   
   return Object.values(orders).sort((a,b) => new Date(b.date) - new Date(a.date));
@@ -633,18 +691,25 @@ function updateOrderRemarks(eventId, orderId, remarks) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) throw new Error("No orders found.");
   
-  if (sheet.getLastColumn() < 15) {
+  const lastCol = Math.max(sheet.getLastColumn(), 15);
+  const headerRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  let remarksCol = headerRow.findIndex(h => /remark|notes?/i.test(String(h).trim())) + 1;
+  if (remarksCol <= 0) {
+    remarksCol = 15;
     sheet.getRange(1, 15).setValue("Remarks");
   }
+  
+  let idCol = headerRow.findIndex(h => /order\s*id/i.test(String(h).trim())) + 1;
+  if (idCol <= 0) idCol = 1;
 
-  const range = sheet.getRange(2, 1, lastRow - 1, 1);
+  const range = sheet.getRange(2, idCol, lastRow - 1, 1);
   const ids = range.getValues().flat();
   
   let found = false;
   const cleanRemarks = remarks !== undefined && remarks !== null ? String(remarks) : "";
   for (let i = 0; i < ids.length; i++) {
     if (String(ids[i]).trim() === String(orderId).trim()) {
-      sheet.getRange(i + 2, 15).setValue(cleanRemarks);
+      sheet.getRange(i + 2, remarksCol).setValue(cleanRemarks);
       found = true;
     }
   }
@@ -660,13 +725,21 @@ function updateOrderStatus(eventId, orderId, newStatus) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) throw new Error("No orders found.");
   
-  const range = sheet.getRange(2, 1, lastRow - 1, 1);
+  const lastCol = Math.max(sheet.getLastColumn(), 15);
+  const headerRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  let statusCol = headerRow.findIndex(h => /status/i.test(String(h).trim())) + 1;
+  if (statusCol <= 0) statusCol = 11;
+
+  let idCol = headerRow.findIndex(h => /order\s*id/i.test(String(h).trim())) + 1;
+  if (idCol <= 0) idCol = 1;
+
+  const range = sheet.getRange(2, idCol, lastRow - 1, 1);
   const ids = range.getValues().flat();
   
   let found = false;
   for (let i = 0; i < ids.length; i++) {
     if (String(ids[i]).trim() === String(orderId).trim()) {
-      sheet.getRange(i + 2, 11).setValue(newStatus);
+      sheet.getRange(i + 2, statusCol).setValue(newStatus);
       found = true;
     }
   }
@@ -828,14 +901,25 @@ function updateOrderPaymentStatus(eventId, orderId, isConfirmed, sendEmail) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) throw new Error("No orders found.");
   
-  const range = sheet.getRange(2, 1, lastRow - 1, 14);
+  const lastCol = Math.max(sheet.getLastColumn(), 15);
+  const headerRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  let payCol = headerRow.findIndex(h => /payment.*confirm|paid/i.test(String(h).trim())) + 1;
+  if (payCol <= 0) {
+    payCol = 14;
+    sheet.getRange(1, 14).setValue("Payment Confirmed");
+  }
+
+  let idCol = headerRow.findIndex(h => /order\s*id/i.test(String(h).trim())) + 1;
+  if (idCol <= 0) idCol = 1;
+
+  const range = sheet.getRange(2, 1, lastRow - 1, lastCol);
   const data = range.getValues();
   
   let found = false;
   let emailStatus = "Not Sent";
   for (let i = 0; i < data.length; i++) {
-    if (String(data[i][0]).trim() === String(orderId).trim()) {
-      sheet.getRange(i + 2, 14).setValue(isConfirmed);
+    if (String(data[i][idCol - 1]).trim() === String(orderId).trim()) {
+      sheet.getRange(i + 2, payCol).setValue(isConfirmed);
       
       if (!found && isConfirmed && sendEmail) {
         const customerName = data[i][6];
@@ -848,7 +932,7 @@ function updateOrderPaymentStatus(eventId, orderId, isConfirmed, sendEmail) {
           let cart = [];
           let totalAmount = 0;
           for (let j = 0; j < data.length; j++) {
-             if (String(data[j][0]).trim() === String(orderId).trim()) {
+             if (String(data[j][idCol - 1]).trim() === String(orderId).trim()) {
                  cart.push({
                      name: data[j][2],
                      price: parseFloat(data[j][3]),
