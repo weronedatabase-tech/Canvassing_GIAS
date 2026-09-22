@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "build": "echo 'No build needed'"
+    "build": "echo 'No build needed'",
+    "lint": "node -c server.js"
   },
   "keywords": [],
   "author": "",

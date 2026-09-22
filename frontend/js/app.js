@@ -146,7 +146,10 @@ const Router = {
             const qs = new URLSearchParams(params).toString();
             path = `/payment?${qs}`;
         }
-        else if (view === 'admin_login') path = '/admin/login';
+        else if (view === 'admin_login') {
+            if (State.adminToken) return await Router.navigate('admin_dashboard');
+            path = '/admin/login';
+        }
         else if (view === 'admin_dashboard') path = '/admin/dashboard';
         else if (view === 'admin_manage_store') path = `/admin/store/${params.id}`;
         else if (view === 'success') {
@@ -173,6 +176,7 @@ const Router = {
         } else if (path === '/checkout') {
             view = 'checkout';
         } else if (path === '/admin/login') {
+            if (State.adminToken) return await Router.navigate('admin_dashboard');
             view = 'admin_login';
         } else if (path === '/admin/dashboard') {
             view = 'admin_dashboard';
@@ -804,18 +808,28 @@ async function renderSuccess(container, params) {
 // ---- ADMIN ----
 
 function renderAdminLogin(container) {
+    if (State.adminToken) {
+        Router.navigate('admin_dashboard');
+        return;
+    }
     container.innerHTML = `
         <div class="p-6 flex justify-center mt-10 fade-in">
-            <form onsubmit="handleAdminLogin(event)" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-sm">
+            <form onsubmit="handleAdminLogin(event)" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-sm border border-gray-200 dark:border-gray-700">
                 <h2 class="text-xl font-bold mb-4 text-center">Admin Access</h2>
                 <div class="relative mb-4">
-                    <input type="password" id="adminPwd" placeholder="Password" required class="w-full p-3 border border-gray-400 rounded dark:bg-gray-700 dark:border-gray-600 pr-10">
+                    <input type="password" id="adminPwd" placeholder="Password" required class="w-full p-3 border border-gray-400 rounded dark:bg-gray-700 dark:border-gray-600 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400">
                     <i class="fas fa-eye password-toggle" onclick="togglePassword(this, 'adminPwd')"></i>
                 </div>
-                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded font-bold">Login</button>
+                <button type="submit" id="adminLoginBtn" class="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white py-2.5 rounded font-bold transition-all flex items-center justify-center gap-2">
+                    <span>Login</span>
+                </button>
             </form>
         </div>
     `;
+    setTimeout(() => {
+        const inp = document.getElementById('adminPwd');
+        if (inp) inp.focus();
+    }, 100);
 }
 
 function togglePassword(icon, id) {
@@ -826,28 +840,54 @@ function togglePassword(icon, id) {
 
 async function handleAdminLogin(e) {
     e.preventDefault();
-    const pwd = document.getElementById('adminPwd').value;
-    showLoading(true, "Authenticating...");
+    const pwdInput = document.getElementById('adminPwd');
+    const pwd = pwdInput ? pwdInput.value.trim() : '';
+    if (!pwd) {
+        customAlert("Please enter the admin password.");
+        return;
+    }
+
+    const btn = document.getElementById('adminLoginBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-60', 'cursor-not-allowed');
+    }
+
+    showLoading(true, "Authenticating with Google Apps Script...");
     try {
         const res = await fetch('/api/admin/login', {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({password: pwd})
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ password: pwd })
         });
         const text = await res.text();
         let json;
         try {
             json = JSON.parse(text);
         } catch (e) {
-            if (text.trim().startsWith('<')) throw new Error("Server returned HTML. Possible connection issue.");
-            throw e;
+            if (text.trim().startsWith('<')) {
+                throw new Error("Received an unexpected HTML response from Google services. The script may still be waking up. Please try again.");
+            }
+            throw new Error("Invalid response format from server.");
         }
-        if(json.success) {
+
+        if (json.success) {
             localStorage.setItem('adminToken', pwd);
             State.adminToken = pwd;
             await Router.navigate('admin_dashboard');
-        } else customAlert("Invalid Password");
-    } catch(e) { customAlert("Login error"); }
-    finally { showLoading(false); }
+        } else {
+            // Show the exact message returned from the backend rather than assuming generic Invalid Password
+            customAlert(json.message || "Invalid Password");
+        }
+    } catch(e) {
+        customAlert(e.message || "Login error. Please check your connection and try again.");
+    } finally {
+        showLoading(false);
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove('opacity-60', 'cursor-not-allowed');
+        }
+    }
 }
 
 async function renderAdminDashboard(container, forceRefresh = false) {
@@ -865,7 +905,7 @@ async function renderAdminDashboard(container, forceRefresh = false) {
                     Stores
                     <button onclick="createNewStorePrompt()" class="bg-gray-900 text-white dark:bg-white dark:text-gray-900 px-4 py-1.5 rounded-lg text-sm font-semibold transition-transform active:scale-95"><i class="fas fa-plus mr-1"></i> New</button>
                 </h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     ${config.stores.map(s => {
                         const today = new Date();
                         today.setHours(0,0,0,0);
@@ -874,16 +914,44 @@ async function renderAdminDashboard(container, forceRefresh = false) {
                         const isPastDate = s.closingDate ? todayStr > closeStr : false;
                         const actuallyOpen = s.isOpen && !isPastDate;
                         const statusText = isPastDate ? 'CLOSED (Past Date)' : (s.isOpen ? 'OPEN' : 'CLOSED');
+                        const isRetail = s.eventType === 'retail';
                         return `
-                        <div class="border border-gray-400 dark:border-gray-800 p-3.5 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition-all ${actuallyOpen ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-red-50/50 dark:bg-red-900/10'}">
-                            <div class="w-full sm:w-auto flex-1 pr-2">
-                                <h4 class="font-semibold text-gray-900 dark:text-gray-100 leading-tight">${escapeHTML(s.name)}</h4>
-                                <p class="text-xs mt-1 text-gray-700 dark:text-gray-400">Status: <span class="font-bold ${actuallyOpen ? 'text-green-600 dark:text-green-400' : 'text-red-500'}">${statusText}</span></p>
+                        <div class="border border-gray-300 dark:border-gray-800 p-4 rounded-xl flex flex-col justify-between h-full transition-all shadow-xs hover:shadow-md ${actuallyOpen ? 'bg-white dark:bg-[#151515]' : 'bg-red-50/40 dark:bg-red-950/10'}">
+                            <div>
+                                <div class="flex items-start justify-between gap-2 mb-2">
+                                    <h4 class="font-bold text-base text-gray-900 dark:text-gray-100 leading-snug break-words flex-1" title="${escapeHTML(s.name)}">
+                                        ${escapeHTML(s.name)}
+                                    </h4>
+                                    <span class="shrink-0 inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full ${isRetail ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800' : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'}">
+                                        <i class="fas ${isRetail ? 'fa-store' : 'fa-globe'} text-[9px]"></i>
+                                        ${isRetail ? 'Retail' : 'Online'}
+                                    </span>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2 mb-4 text-xs">
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-bold text-xs ${actuallyOpen ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300 border border-red-200 dark:border-red-800'}">
+                                        <span class="w-2 h-2 rounded-full ${actuallyOpen ? 'bg-emerald-500' : 'bg-red-500'}"></span>
+                                        ${statusText}
+                                    </span>
+                                    ${closeStr ? `
+                                        <span class="text-gray-500 dark:text-gray-400 flex items-center gap-1 font-medium">
+                                            <i class="far fa-calendar-alt text-gray-400 text-xs"></i> Closes: ${closeStr}
+                                        </span>
+                                    ` : ''}
+                                </div>
                             </div>
-                            <div class="w-full sm:w-auto flex justify-end gap-2 text-sm shrink-0 items-center">
-                                <button onclick="toggleStoreStatus('${s.id}', ${!s.isOpen})" class="bg-white dark:bg-gray-800 border border-gray-400 dark:border-gray-700 px-3 py-1.5 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">${s.isOpen ? 'Set Closed' : 'Set Open'}</button>
-                                <button onclick="Router.navigate('admin_manage_store', {id: '${s.id}'})" class="bg-gray-900 text-white dark:bg-white dark:text-gray-900 px-4 py-1.5 rounded-lg font-semibold transition-transform active:scale-95">Manage</button>
-                                <button onclick="promptDeleteEvent('${s.id}', '${escapeHTML(s.name).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-red-500 transition-colors p-2 ml-1" title="Delete Event"><i class="fas fa-trash"></i></button>
+                            <div class="pt-3 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between gap-2 mt-auto">
+                                <button onclick="toggleStoreStatus('${s.id}', ${!s.isOpen})" class="text-xs px-3 py-1.5 rounded-lg font-semibold border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 transition-colors">
+                                    ${s.isOpen ? 'Set Closed' : 'Set Open'}
+                                </button>
+                                <div class="flex items-center gap-1.5">
+                                    <button onclick="Router.navigate('admin_manage_store', {id: '${s.id}'})" class="bg-gray-900 hover:bg-black text-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200 px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-transform active:scale-95 flex items-center gap-1.5">
+                                        <span>Manage</span>
+                                        <i class="fas fa-arrow-right text-[10px]"></i>
+                                    </button>
+                                    <button onclick="promptDeleteEvent('${s.id}', '${escapeHTML(s.name).replace(/'/g, "\\'")}')" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30" title="Delete Event">
+                                        <i class="fas fa-trash text-sm"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     `}).join('')}
@@ -962,7 +1030,7 @@ function renderAdminProductsList(products, storeId) {
                 ${p.description ? `<p class="text-xs text-gray-700 dark:text-gray-400 mt-0.5 break-words whitespace-pre-wrap">${escapeHTML(p.description)}</p>` : ''}
                 <p class="text-xs font-semibold text-gray-600 dark:text-gray-400 mt-0.5">$${p.price.toFixed(2)}</p>
             </div>
-            <button onclick="adminDeleteProduct('${storeId}', '${escapeHTML(p.id).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-red-500 transition-colors p-2 ml-1"><i class="fas fa-trash"></i></button>
+            <button onclick="adminDeleteProduct('${storeId}', '${escapeHTML(p.id).replace(/'/g, "\\'")}')" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors p-2 ml-1" title="Delete Product"><i class="fas fa-trash"></i></button>
         </div>
     `).join('');
 }
@@ -1007,12 +1075,24 @@ async function manageStore(storeId, initialTab = 'info') {
                     <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Fundraiser Name</label>
                     <input type="text" id="stName" value="${config.name || ''}" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg dark:bg-[#1a1a1a] text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all">
                 </div>
-                <div>
-                    <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Store Type</label>
-                    <select id="stEventType" class="w-full p-2.5 border border-gray-400 dark:border-gray-800 rounded-lg dark:bg-[#1a1a1a] text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-100 transition-all">
+                <div class="bg-indigo-50/70 dark:bg-indigo-950/40 border-2 border-indigo-500/70 dark:border-indigo-400/60 rounded-xl p-3 shadow-xs">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label for="stEventType" class="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider flex items-center gap-1.5 cursor-pointer">
+                            <i class="fas fa-store text-indigo-600 dark:text-indigo-400"></i>
+                            <span>Store Type</span>
+                        </label>
+                        <span class="inline-flex items-center gap-1 bg-indigo-600 text-white text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full tracking-wide">
+                            <i class="fas fa-star text-[8px]"></i> Important
+                        </span>
+                    </div>
+                    <select id="stEventType" onchange="updateStoreTypeDescription(this.value)" class="w-full p-2.5 font-bold text-sm border-2 border-indigo-300 dark:border-indigo-600 rounded-lg dark:bg-[#1a1a1a] bg-white text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition-all cursor-pointer shadow-xs">
                         <option value="online" ${(!config.eventType || config.eventType === 'online') ? 'selected' : ''}>Online Store (Collect Later)</option>
                         <option value="retail" ${(config.eventType === 'retail') ? 'selected' : ''}>Retail Store (In Person)</option>
                     </select>
+                    <p id="stEventTypeHelper" class="text-xs text-indigo-900/80 dark:text-indigo-200/80 mt-1.5 font-medium flex items-center gap-1.5">
+                        <i class="fas fa-info-circle shrink-0"></i>
+                        <span>${(!config.eventType || config.eventType === 'online') ? 'Online: Pre-orders with collection at a later date.' : 'Retail: Walk-in point-of-sale for instant in-person sales.'}</span>
+                    </p>
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">Closing Date</label>
@@ -1251,6 +1331,17 @@ async function saveStoreSettings(id) {
     renderAdminDashboard(document.getElementById('app-container'), true);
 }
 
+window.updateStoreTypeDescription = function(val) {
+    const helper = document.getElementById('stEventTypeHelper');
+    if (!helper) return;
+    const textSpan = helper.querySelector('span');
+    if (textSpan) {
+        textSpan.textContent = val === 'retail' 
+            ? 'Retail: Walk-in point-of-sale for instant in-person sales.' 
+            : 'Online: Pre-orders with collection at a later date.';
+    }
+};
+
 async function adminUploadSummaryFile(eventId, type) {
     const fileInput = document.getElementById(type === 'image' ? 'summaryImage' : 'summaryPdf');
     if (!fileInput.files || fileInput.files.length === 0) {
@@ -1359,10 +1450,128 @@ async function adminDeleteProduct(eventId, productId) {
 
 
 
+function renderOrderRemarkContent(storeId, orderId, remarks) {
+    const escapedOrderId = escapeHTML(orderId).replace(/'/g, "\\'");
+    if (remarks && remarks.trim().length > 0) {
+        return `
+            <div class="bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-lg p-2.5 text-xs">
+                <div class="flex items-center justify-between gap-2 mb-1.5 border-b border-amber-200/70 dark:border-amber-900/40 pb-1">
+                    <span class="font-bold text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-1.5 uppercase tracking-wide">
+                        <i class="fas fa-sticky-note text-amber-600 dark:text-amber-400"></i> Remarks
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="startEditRemark('${storeId}', '${escapedOrderId}')" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-semibold text-[11px] flex items-center gap-1 hover:underline transition-colors" title="Edit Remarks">
+                            <i class="fas fa-edit text-[10px]"></i> Edit
+                        </button>
+                        <button type="button" onclick="deleteRemark('${storeId}', '${escapedOrderId}')" class="text-red-600 hover:text-red-700 dark:text-red-400 font-semibold text-[11px] flex items-center gap-1 hover:underline transition-colors" title="Delete Remarks">
+                            <i class="fas fa-trash-alt text-[10px]"></i> Delete
+                        </button>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-800 dark:text-gray-200 break-words whitespace-pre-wrap leading-relaxed select-text">${escapeHTML(remarks)}</div>
+            </div>
+        `;
+    }
+    return `
+        <button type="button" onclick="startEditRemark('${storeId}', '${escapedOrderId}')" class="w-full text-xs font-semibold py-1.5 px-3 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100/60 dark:hover:bg-gray-800/40 transition-colors flex items-center justify-center gap-1.5">
+            <i class="fas fa-plus text-[10px]"></i> Add Remark
+        </button>
+    `;
+}
+
+function startEditRemark(storeId, orderId) {
+    const container = document.getElementById(`remark-section-${orderId}`);
+    if (!container) return;
+    const order = State.ordersCache.find(o => o.orderId === orderId);
+    const currentRemark = (order && order.remarks) ? order.remarks : '';
+    const escapedOrderId = escapeHTML(orderId).replace(/'/g, "\\'");
+    
+    container.innerHTML = `
+        <div class="bg-gray-100 dark:bg-gray-800/80 border border-gray-300 dark:border-gray-600 rounded-lg p-2.5 text-xs">
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+                <span class="font-bold text-[11px] text-gray-700 dark:text-gray-300 flex items-center gap-1.5 uppercase tracking-wide">
+                    <i class="fas fa-sticky-note text-amber-500"></i> ${currentRemark ? 'Edit' : 'Add'} Remarks
+                </span>
+                <span class="text-[10px] text-gray-500 dark:text-gray-400 italic">Admin only</span>
+            </div>
+            <textarea id="remark-input-${escapeHTML(orderId)}" class="w-full p-2 text-xs rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-black text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-gray-300 break-words resize-y" rows="3" placeholder="Enter order remarks (visible only to admins)...">${escapeHTML(currentRemark)}</textarea>
+            <div class="flex justify-end gap-2 mt-2">
+                <button type="button" onclick="cancelEditRemark('${storeId}', '${escapedOrderId}')" class="px-3 py-1 rounded-lg text-xs font-semibold bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 transition-colors">
+                    Cancel
+                </button>
+                <button type="button" onclick="saveRemark('${storeId}', '${escapedOrderId}')" class="px-3 py-1 rounded-lg text-xs font-bold bg-gray-900 hover:bg-black text-white dark:bg-white dark:hover:bg-gray-200 dark:text-black transition-colors flex items-center gap-1">
+                    <i class="fas fa-check text-[10px]"></i> Save
+                </button>
+            </div>
+        </div>
+    `;
+    const textarea = document.getElementById(`remark-input-${orderId}`);
+    if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    }
+}
+
+function cancelEditRemark(storeId, orderId) {
+    const container = document.getElementById(`remark-section-${orderId}`);
+    if (!container) return;
+    const order = State.ordersCache.find(o => o.orderId === orderId);
+    container.innerHTML = renderOrderRemarkContent(storeId, orderId, order ? order.remarks : '');
+}
+
+async function saveRemark(storeId, orderId) {
+    const input = document.getElementById(`remark-input-${orderId}`);
+    if (!input) return;
+    const newRemarks = input.value.trim();
+    const order = State.ordersCache.find(o => o.orderId === orderId);
+    const oldRemarks = (order && order.remarks) ? order.remarks.trim() : '';
+
+    if (newRemarks === oldRemarks) {
+        cancelEditRemark(storeId, orderId);
+        return;
+    }
+
+    try {
+        await apiCall('ADMIN_UPDATE_ORDER_REMARKS', { eventId: storeId, orderId: orderId, remarks: newRemarks }, true);
+        if (order) order.remarks = newRemarks;
+        const container = document.getElementById(`remark-section-${orderId}`);
+        if (container) {
+            container.innerHTML = renderOrderRemarkContent(storeId, orderId, newRemarks);
+        }
+        const card = document.querySelector(`.order-card[data-id="${orderId}"]`);
+        if (card && order) {
+            card.setAttribute('data-search', `${(order.customer || '').toLowerCase()} ${order.contact || ''} ${(order.orderId || '').toLowerCase()} ${(newRemarks || '').toLowerCase()}`);
+        }
+    } catch(err) {
+        // Handled in apiCall
+    }
+}
+
+async function deleteRemark(storeId, orderId) {
+    if (!await customConfirm("Are you sure you want to delete the remarks for this order?")) {
+        return;
+    }
+    try {
+        await apiCall('ADMIN_UPDATE_ORDER_REMARKS', { eventId: storeId, orderId: orderId, remarks: "" }, true);
+        const order = State.ordersCache.find(o => o.orderId === orderId);
+        if (order) order.remarks = "";
+        const container = document.getElementById(`remark-section-${orderId}`);
+        if (container) {
+            container.innerHTML = renderOrderRemarkContent(storeId, orderId, "");
+        }
+        const card = document.querySelector(`.order-card[data-id="${orderId}"]`);
+        if (card && order) {
+            card.setAttribute('data-search', `${(order.customer || '').toLowerCase()} ${order.contact || ''} ${(order.orderId || '').toLowerCase()}`);
+        }
+    } catch(err) {
+        // Handled in apiCall
+    }
+}
+
 function renderOrderList(orders, storeId) {
     if(!orders || orders.length === 0) return '<p class="text-sm text-gray-700 dark:text-gray-400">No orders.</p>';
     return orders.map(o => `
-        <div class="border p-3.5 sm:p-4 rounded-xl dark:border-gray-700 bg-gray-50 dark:bg-gray-900 order-card mb-3" data-id="${escapeHTML(o.orderId)}" data-search="${escapeHTML(o.customer).toLowerCase()} ${escapeHTML(o.contact)} ${escapeHTML(o.orderId).toLowerCase()}" data-status="${escapeHTML(o.status || 'Not Collected')}" data-payment="${o.paymentConfirmed ? 'paid' : 'unpaid'}">
+        <div class="border p-3.5 sm:p-4 rounded-xl dark:border-gray-700 bg-gray-50 dark:bg-gray-900 order-card mb-3" data-id="${escapeHTML(o.orderId)}" data-search="${escapeHTML(o.customer).toLowerCase()} ${escapeHTML(o.contact)} ${escapeHTML(o.orderId).toLowerCase()} ${escapeHTML(o.remarks || '').toLowerCase()}" data-status="${escapeHTML(o.status || 'Not Collected')}" data-payment="${o.paymentConfirmed ? 'paid' : 'unpaid'}">
             <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2.5 gap-2">
                 <div class="flex-1 min-w-0">
                     <p class="font-bold text-base text-gray-900 dark:text-gray-100 break-words">${escapeHTML(o.customer)}</p>
@@ -1384,15 +1593,14 @@ function renderOrderList(orders, storeId) {
             <ul class="text-xs text-gray-700 dark:text-gray-300 my-2.5 list-disc pl-4 space-y-1 bg-white/60 dark:bg-black/20 p-2 rounded-lg border border-gray-200 dark:border-gray-800 break-words">
                 ${o.items.map(i => `<li class="break-words">${i.qty}x ${escapeHTML(i.name)}</li>`).join('')}
             </ul>
+            <div id="remark-section-${escapeHTML(o.orderId)}" class="my-2.5">
+                ${renderOrderRemarkContent(storeId, o.orderId, o.remarks || '')}
+            </div>
             <div class="flex flex-col gap-3 mt-3 pt-2 border-t border-gray-200 dark:border-gray-800">
-                <div class="flex items-center gap-4">
-                    <label class="text-xs font-bold flex items-center gap-1 cursor-pointer">
-                        <input type="radio" name="status_${escapeHTML(o.orderId)}" value="Not Collected" ${o.status !== 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', 'Not Collected')">
-                        <span class="text-red-500">Not Collected</span>
-                    </label>
-                    <label class="text-xs font-bold flex items-center gap-1 cursor-pointer">
-                        <input type="radio" name="status_${escapeHTML(o.orderId)}" value="Collected" ${o.status === 'Collected' ? 'checked' : ''} onchange="updateOrdStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', 'Collected')">
-                        <span class="text-green-500">Collected</span>
+                <div class="flex items-center">
+                    <label id="collected-badge-${escapeHTML(o.orderId)}" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm ${o.status === 'Collected' ? 'bg-emerald-100 text-emerald-900 border-emerald-400 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-600 ring-1 ring-emerald-400/30' : 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60 dark:hover:bg-amber-950/60'}">
+                        <input type="checkbox" class="w-4 h-4 shrink-0 rounded text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer" ${o.status === 'Collected' ? 'checked' : ''} onchange="updateOrdCollectedStatus('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}', this.checked, this)">
+                        <span class="select-none font-bold">Collected</span>
                     </label>
                 </div>
                 <div class="flex items-center justify-between gap-4">
@@ -1410,7 +1618,7 @@ function renderOrderList(orders, storeId) {
                     <div class="flex items-center gap-3">
                         <button onclick="adminResendEmail('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-blue-500 transition-colors" title="Resend Email"><i class="fas fa-envelope text-sm"></i></button>
                         <button onclick="adminEditOrderModal('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-blue-500 transition-colors" title="Edit Order"><i class="fas fa-edit text-sm"></i></button>
-                        <button onclick="adminDeleteOrder('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-red-500 transition-colors" title="Delete Order"><i class="fas fa-trash text-sm"></i></button>
+                        <button onclick="adminDeleteOrder('${storeId}', '${escapeHTML(o.orderId).replace(/'/g, "\\'")}')" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors" title="Delete Order"><i class="fas fa-trash text-sm"></i></button>
                     </div>
                 </div>
             </div>
@@ -1684,16 +1892,39 @@ async function updateOrdPaymentStatus(eventId, orderId, isConfirmed, checkboxEle
     filterAdminOrders();
 }
 
+async function updateOrdCollectedStatus(eventId, orderId, isChecked, checkboxElem) {
+    const status = isChecked ? 'Collected' : 'Not Collected';
+    const badge = document.getElementById(`collected-badge-${orderId}`);
+    if (badge) {
+        if (isChecked) {
+            badge.className = "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm bg-emerald-100 text-emerald-900 border-emerald-400 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-600 ring-1 ring-emerald-400/30";
+        } else {
+            badge.className = "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60 dark:hover:bg-amber-950/60";
+        }
+    }
+    try {
+        await apiCall('ADMIN_UPDATE_ORDER', { eventId, orderId, status }, true);
+        const idx = State.ordersCache.findIndex(o => o.orderId === orderId);
+        if (idx > -1) State.ordersCache[idx].status = status;
+        
+        const card = document.querySelector(`.order-card[data-id="${orderId}"]`);
+        if (card) card.setAttribute('data-status', status);
+        
+        filterAdminOrders();
+    } catch(err) {
+        if (checkboxElem) checkboxElem.checked = !isChecked;
+        if (badge) {
+            if (!isChecked) {
+                badge.className = "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm bg-emerald-100 text-emerald-900 border-emerald-400 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-600 ring-1 ring-emerald-400/30";
+            } else {
+                badge.className = "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all shadow-sm bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700/60 dark:hover:bg-amber-950/60";
+            }
+        }
+    }
+}
+
 async function updateOrdStatus(eventId, orderId, status) {
-    await apiCall('ADMIN_UPDATE_ORDER', { eventId, orderId, status }, true);
-    const idx = State.ordersCache.findIndex(o => o.orderId === orderId);
-    if(idx > -1) State.ordersCache[idx].status = status;
-    
-    // Update the specific card's data-status for filtering without re-rendering everything
-    const card = document.querySelector(`.order-card[data-id="${orderId}"]`);
-    if (card) card.setAttribute('data-status', status);
-    
-    filterAdminOrders();
+    return updateOrdCollectedStatus(eventId, orderId, status === 'Collected');
 }
 
 async function adminDeleteOrder(eventId, orderId) {
@@ -2232,3 +2463,14 @@ async function verifyPendingOrders() {
     }
 }
 verifyPendingOrders();
+
+// Fetch environment config and display banner if in Experimentation mode
+fetch('/api/env')
+  .then(res => res.json())
+  .then(data => {
+    if (data.env === 'Exp') {
+      const banner = document.getElementById('experimentationBanner');
+      if (banner) banner.classList.remove('hidden');
+    }
+  })
+  .catch(err => console.error('Failed to fetch env config', err));

@@ -1,4 +1,5 @@
-const ROOT_FOLDER_ID = "1A8jf8VQ7B5zAc7D4sEcW-Kr04V3XTKWT"; 
+// ROOT_FOLDER_ID and GAS_URL are defined in config.js 
+var _activeRootFolderId = null; 
  
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('index')
@@ -10,13 +11,20 @@ function doGet() {
 function doPost(e) {
   try {
     const req = JSON.parse(e.postData.contents);
+    if (req.rootFolderId) {
+      _activeRootFolderId = req.rootFolderId;
+    }
     let data = null;
     
     // Check Admin Password for all ADMIN_ actions
     if (req.action && (req.action.startsWith('ADMIN_') || req.action === 'ADMIN_LOGIN')) {
       const storedPassword = PropertiesService.getScriptProperties().getProperty("Admin Password");
+      const cleanStored = storedPassword ? String(storedPassword).trim() : "";
+      const cleanReq = req.password !== undefined && req.password !== null ? String(req.password).trim() : "";
+      const isMatch = storedPassword && (req.password === storedPassword || (cleanReq && cleanReq === cleanStored));
+
       // If property is not set, or passwords do not match, reject
-      if (!storedPassword || req.password !== storedPassword) {
+      if (!isMatch) {
         return ContentService.createTextOutput(JSON.stringify({
           success: false,
           message: "Invalid Admin Password"
@@ -64,6 +72,9 @@ function doPost(e) {
       case 'ADMIN_UPDATE_ORDER': 
         data = updateOrderStatus(req.eventId, req.orderId, req.status); 
         break;
+      case 'ADMIN_UPDATE_ORDER_REMARKS':
+        data = updateOrderRemarks(req.eventId, req.orderId, req.remarks);
+        break;
       case 'ADMIN_EXPORT_VENDOR_ORDER':
         data = exportVendorOrder(req.eventId, req.eventName, req.itemStats);
         break;
@@ -107,7 +118,18 @@ function doPost(e) {
 }
 
 function getRootFolder() {
-  return DriveApp.getFolderById(ROOT_FOLDER_ID);
+  var id = null;
+  if (typeof ROOT_FOLDER_ID !== 'undefined' && ROOT_FOLDER_ID) {
+    id = ROOT_FOLDER_ID;
+  } else if (_activeRootFolderId) {
+    id = _activeRootFolderId;
+  } else if (typeof CONFIG !== 'undefined' && typeof APP_ENV !== 'undefined' && CONFIG[APP_ENV]) {
+    id = CONFIG[APP_ENV].ROOT_FOLDER_ID;
+  }
+  if (!id) {
+    throw new Error("ROOT_FOLDER_ID is not defined. Please ensure backend/config.js is added to your Google Apps Script project.");
+  }
+  return DriveApp.getFolderById(id);
 }
 
 function getMasterConfig() {
@@ -579,7 +601,7 @@ function getOrders(eventId) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return []; 
   
-  const lastCol = Math.max(sheet.getLastColumn(), 14); 
+  const lastCol = Math.max(sheet.getLastColumn(), 15); 
   const range = sheet.getRange(2, 1, lastRow - 1, lastCol);
   const data = range.getValues();
   
@@ -592,6 +614,7 @@ function getOrders(eventId) {
          email: row[8], imageUrl: row[9], status: row[10] || "Pending",
          custType: row[11] || "", custRelationName: row[12] || "",
          paymentConfirmed: row[13] === true || String(row[13]).toLowerCase() === 'true',
+         remarks: (row[14] !== undefined && row[14] !== null) ? String(row[14]) : "",
          items: [], total: 0
        };
     }
@@ -601,6 +624,33 @@ function getOrders(eventId) {
   });
   
   return Object.values(orders).sort((a,b) => new Date(b.date) - new Date(a.date));
+}
+
+function updateOrderRemarks(eventId, orderId, remarks) {
+  const sheetId = getSheetIdForEvent(eventId);
+  const ss = SpreadsheetApp.openById(sheetId);
+  const sheet = ss.getSheets()[0];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error("No orders found.");
+  
+  if (sheet.getLastColumn() < 15) {
+    sheet.getRange(1, 15).setValue("Remarks");
+  }
+
+  const range = sheet.getRange(2, 1, lastRow - 1, 1);
+  const ids = range.getValues().flat();
+  
+  let found = false;
+  const cleanRemarks = remarks !== undefined && remarks !== null ? String(remarks) : "";
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i]).trim() === String(orderId).trim()) {
+      sheet.getRange(i + 2, 15).setValue(cleanRemarks);
+      found = true;
+    }
+  }
+  if (!found) throw new Error("Order ID not found.");
+  SpreadsheetApp.flush();
+  return { success: true, remarks: cleanRemarks };
 }
 
 function updateOrderStatus(eventId, orderId, newStatus) {

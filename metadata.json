@@ -1,0 +1,8 @@
+{
+  "name": "Fundraising Hub",
+  "description": "Canvassing and fundraising order management system for charity merchandise and goodies.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
