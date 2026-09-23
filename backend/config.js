@@ -1,4 +1,4 @@
-const APP_ENV = "Exp"; // Manually set to "Prod" or "Exp"
+const APP_ENV = "Prod"; // Manually set to "Prod" or "Exp"
 
 const CONFIG = {
   Prod: {
