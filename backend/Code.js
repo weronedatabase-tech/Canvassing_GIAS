@@ -132,129 +132,287 @@ function getRootFolder() {
   return DriveApp.getFolderById(id);
 }
 
-function getMasterConfig() {
-  const root = getRootFolder();
-  const files = root.getFilesByName("master_config.json");
-  if (files.hasNext()) {
-    let config = JSON.parse(files.next().getBlob().getDataAsString());
-    let modified = false;
-    if (config.stores) {
-      config.stores.forEach(s => {
-        const keysToRemove = [
-          'imageBase64', 'mimeType', 
-          'summaryImageBase64', 'summaryImageMimeType',
-          'summaryPdfBase64', 'summaryPdfMimeType'
-        ];
-        keysToRemove.forEach(k => {
-          if (s[k]) {
-            delete s[k];
-            modified = true;
-          }
-        });
-      });
+function cleanupOldMasterConfig(root) {
+  try {
+    const files = root.getFilesByName("master_config.json");
+    while (files.hasNext()) {
+      files.next().setTrashed(true);
     }
-    if (modified) {
-      saveMasterConfig(config);
-    }
-    return config;
-  }
-  
-  // Migration / Init
-  const folders = root.getFolders();
-  const stores = [];
-  while(folders.hasNext()) {
-    const f = folders.next();
-    if(f.getName() !== "Template Canvassing Event") {
-       stores.push({
-         id: f.getId(),
-         name: f.getName(),
-         isOpen: true,
-         closingDate: "",
-         infoHtml: "Welcome to " + f.getName(),
-         bannerImageId: null,
-         paynowNumber: "",
-         emailProcessing: "",
-         emailConfirmed: "",
-         emailFooter: ""
-       });
-    }
-  }
-  const config = { stores: stores };
-  root.createFile("master_config.json", JSON.stringify(config), MimeType.PLAIN_TEXT);
-  return config;
+  } catch (e) {}
 }
 
-function saveMasterConfig(config) {
+function readOldMasterConfig(root) {
+  try {
+    const files = root.getFilesByName("master_config.json");
+    if (files.hasNext()) {
+      const f = files.next();
+      const content = f.getBlob().getDataAsString();
+      return JSON.parse(content);
+    }
+  } catch (e) {}
+  return null;
+}
+
+function getStoresRegistrySheet() {
   const root = getRootFolder();
-  const files = root.getFilesByName("master_config.json");
+  const files = root.getFilesByName("Stores_Registry");
+  let ss = null;
+
   if (files.hasNext()) {
-    files.next().setContent(JSON.stringify(config));
+    ss = SpreadsheetApp.open(files.next());
   } else {
-    root.createFile("master_config.json", JSON.stringify(config), MimeType.PLAIN_TEXT);
+    // Check if there is an existing master_config.json to migrate from
+    const oldConfig = readOldMasterConfig(root);
+
+    ss = SpreadsheetApp.create("Stores_Registry");
+    const ssFile = DriveApp.getFileById(ss.getId());
+    ssFile.moveTo(root);
+
+    const sheet = ss.getSheets()[0];
+    sheet.setName("Stores");
+
+    const headers = [
+      "ID", "Name", "EventType", "IsOpen", "ClosingDate", "PayNowNumber",
+      "BannerImageId", "InfoHtml", "EmailProcessing", "EmailConfirmed",
+      "EmailFooter", "SummaryImageId", "SummaryImageName", "SummaryPdfId", "SummaryPdfName", "SheetId"
+    ];
+    sheet.appendRow(headers);
+    sheet.setFrozenRows(1);
+
+    if (oldConfig && oldConfig.stores && oldConfig.stores.length > 0) {
+      oldConfig.stores.forEach(s => {
+        sheet.appendRow([
+          s.id || "",
+          s.name || "",
+          s.eventType || "online",
+          s.isOpen !== false,
+          s.closingDate || "",
+          s.paynowNumber || "",
+          s.bannerImageId || "",
+          s.infoHtml || "",
+          s.emailProcessing || s.emailIntro || "",
+          s.emailConfirmed || "",
+          s.emailFooter || "",
+          s.summaryImageId || "",
+          s.summaryImageName || "",
+          s.summaryPdfId || "",
+          s.summaryPdfName || "",
+          s.sheetId || ""
+        ]);
+      });
+    }
+
+    // Now that we've migrated, clean up the old master_config.json file
+    cleanupOldMasterConfig(root);
   }
+
+  // Clean up any lingering master_config.json in root
+  cleanupOldMasterConfig(root);
+
+  return ss.getSheetByName("Stores") || ss.getSheets()[0];
+}
+
+function getMasterConfig() {
+  const root = getRootFolder();
+  cleanupOldMasterConfig(root);
+
+  const sheet = getStoresRegistrySheet();
+  const lastRow = sheet.getLastRow();
+  
+  if (lastRow < 2) {
+    // Initialize registry by discovering existing folders
+    const folders = root.getFolders();
+    const discoveredStores = [];
+    while (folders.hasNext()) {
+      const f = folders.next();
+      const name = f.getName();
+      if (name !== "Template Canvassing Event" && name !== "Archived_Deleted") {
+        let sheetId = "";
+        try {
+          const sheets = f.getFilesByType(MimeType.GOOGLE_SHEETS);
+          if (sheets.hasNext()) sheetId = sheets.next().getId();
+        } catch (e) {}
+
+        const s = {
+          id: f.getId(),
+          name: name,
+          eventType: 'online',
+          isOpen: true,
+          closingDate: "",
+          infoHtml: "Welcome to " + name,
+          bannerImageId: "",
+          paynowNumber: "",
+          emailProcessing: "",
+          emailConfirmed: "",
+          emailFooter: "",
+          summaryImageId: "",
+          summaryImageName: "",
+          summaryPdfId: "",
+          summaryPdfName: "",
+          sheetId: sheetId
+        };
+        discoveredStores.push(s);
+        sheet.appendRow([
+          s.id, s.name, s.eventType, s.isOpen, s.closingDate, s.paynowNumber,
+          s.bannerImageId, s.infoHtml, s.emailProcessing, s.emailConfirmed,
+          s.emailFooter, s.summaryImageId, s.summaryImageName, s.summaryPdfId, s.summaryPdfName, s.sheetId
+        ]);
+      }
+    }
+    return { stores: discoveredStores };
+  }
+
+  const lastCol = Math.max(sheet.getLastColumn(), 16);
+  const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+  const stores = [];
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    const id = String(row[0] || "").trim();
+    if (!id || id.toLowerCase() === "id") continue;
+
+    stores.push({
+      id: id,
+      name: String(row[1] || ""),
+      eventType: String(row[2] || "online"),
+      isOpen: row[3] === true || String(row[3]).toLowerCase() === "true",
+      closingDate: row[4] instanceof Date ? Utilities.formatDate(row[4], "Asia/Singapore", "yyyy-MM-dd") : String(row[4] || ""),
+      paynowNumber: String(row[5] || ""),
+      bannerImageId: row[6] || null,
+      infoHtml: String(row[7] || ""),
+      emailProcessing: String(row[8] || ""),
+      emailConfirmed: String(row[9] || ""),
+      emailFooter: String(row[10] || ""),
+      summaryImageId: row[11] || null,
+      summaryImageName: row[12] || null,
+      summaryPdfId: row[13] || null,
+      summaryPdfName: row[14] || null,
+      sheetId: row[15] || null
+    });
+  }
+
+  return { stores: stores };
 }
 
 function saveStoreConfig(payload) {
-  const config = getMasterConfig();
-  const idx = config.stores.findIndex(s => s.id === payload.id);
-  
+  const root = getRootFolder();
+  cleanupOldMasterConfig(root);
+
+  const sheet = getStoresRegistrySheet();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error("No stores registered");
+
+  const lastCol = Math.max(sheet.getLastColumn(), 16);
+  const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+  const rowIndex = ids.findIndex(id => String(id).trim() === String(payload.id).trim());
+  if (rowIndex === -1) throw new Error("Store not found in registry");
+
+  const rowNum = rowIndex + 2;
+
+  // Banner upload
   if (payload.imageBase64) {
-    // Upload new banner
     const folder = DriveApp.getFolderById(payload.id);
-    const blob = Utilities.newBlob(Utilities.base64Decode((payload.imageBase64.includes(',') ? payload.imageBase64.split(',')[1] : payload.imageBase64)), payload.mimeType, `Banner_${Date.now()}`);
+    const blob = Utilities.newBlob(
+      Utilities.base64Decode(payload.imageBase64.includes(',') ? payload.imageBase64.split(',')[1] : payload.imageBase64),
+      payload.mimeType,
+      `Banner_${Date.now()}`
+    );
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     payload.bannerImageId = file.getId();
     delete payload.imageBase64;
     delete payload.mimeType;
   }
-  
+
+  // Summary image upload
   if (payload.summaryImageBase64) {
     const folder = DriveApp.getFolderById(payload.id);
     const ext = payload.summaryImageMimeType === 'image/png' ? 'png' : 'jpg';
-    const blob = Utilities.newBlob(Utilities.base64Decode((payload.summaryImageBase64.includes(',') ? payload.summaryImageBase64.split(',')[1] : payload.summaryImageBase64)), payload.summaryImageMimeType, `SummaryImage_${Date.now()}.${ext}`);
+    const blob = Utilities.newBlob(
+      Utilities.base64Decode(payload.summaryImageBase64.includes(',') ? payload.summaryImageBase64.split(',')[1] : payload.summaryImageBase64),
+      payload.summaryImageMimeType,
+      `SummaryImage_${Date.now()}.${ext}`
+    );
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     payload.summaryImageId = file.getId();
-    payload.summaryImageName = payload.summaryImageName || `Summary Image`;
+    payload.summaryImageName = payload.summaryImageName || "Summary Image";
     delete payload.summaryImageBase64;
     delete payload.summaryImageMimeType;
   }
-  
+
+  // Summary PDF upload
   if (payload.summaryPdfBase64) {
     const folder = DriveApp.getFolderById(payload.id);
-    const blob = Utilities.newBlob(Utilities.base64Decode((payload.summaryPdfBase64.includes(',') ? payload.summaryPdfBase64.split(',')[1] : payload.summaryPdfBase64)), payload.summaryPdfMimeType, `SummaryPdf_${Date.now()}.pdf`);
+    const blob = Utilities.newBlob(
+      Utilities.base64Decode(payload.summaryPdfBase64.includes(',') ? payload.summaryPdfBase64.split(',')[1] : payload.summaryPdfBase64),
+      payload.summaryPdfMimeType,
+      `SummaryPdf_${Date.now()}.pdf`
+    );
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     payload.summaryPdfId = file.getId();
-    payload.summaryPdfName = payload.summaryPdfName || `Summary PDF`;
+    payload.summaryPdfName = payload.summaryPdfName || "Summary PDF";
     delete payload.summaryPdfBase64;
     delete payload.summaryPdfMimeType;
   }
-  
+
   if (payload.removeSummaryImage) {
-    payload.summaryImageId = null;
-    payload.summaryImageName = null;
+    payload.summaryImageId = "";
+    payload.summaryImageName = "";
     delete payload.removeSummaryImage;
   }
-  
+
   if (payload.removeSummaryPdf) {
-    payload.summaryPdfId = null;
-    payload.summaryPdfName = null;
+    payload.summaryPdfId = "";
+    payload.summaryPdfName = "";
     delete payload.removeSummaryPdf;
   }
-  
-  if (idx > -1) {
-    config.stores[idx] = { ...config.stores[idx], ...payload };
-  } else {
-    throw new Error("Store not found");
+
+  // Dynamic header mapping
+  const headerRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const colMap = {};
+  for (let c = 0; c < headerRow.length; c++) {
+    colMap[String(headerRow[c]).trim().toLowerCase()] = c + 1;
   }
-  saveMasterConfig(config);
-  return config;
+
+  const setCell = (colKey, val, defaultCol) => {
+    const col = colMap[colKey.toLowerCase()] || defaultCol;
+    if (col) {
+      sheet.getRange(rowNum, col).setValue(val !== undefined && val !== null ? val : "");
+    }
+  };
+
+  if (payload.name !== undefined) setCell("Name", payload.name, 2);
+  if (payload.eventType !== undefined) setCell("EventType", payload.eventType, 3);
+  if (payload.isOpen !== undefined) setCell("IsOpen", payload.isOpen, 4);
+  if (payload.closingDate !== undefined) setCell("ClosingDate", payload.closingDate, 5);
+  if (payload.paynowNumber !== undefined) setCell("PayNowNumber", payload.paynowNumber, 6);
+  if (payload.bannerImageId !== undefined) setCell("BannerImageId", payload.bannerImageId, 7);
+  if (payload.infoHtml !== undefined) setCell("InfoHtml", payload.infoHtml, 8);
+  if (payload.emailProcessing !== undefined) setCell("EmailProcessing", payload.emailProcessing, 9);
+  if (payload.emailConfirmed !== undefined) setCell("EmailConfirmed", payload.emailConfirmed, 10);
+  if (payload.emailFooter !== undefined) setCell("EmailFooter", payload.emailFooter, 11);
+  if (payload.summaryImageId !== undefined) setCell("SummaryImageId", payload.summaryImageId, 12);
+  if (payload.summaryImageName !== undefined) setCell("SummaryImageName", payload.summaryImageName, 13);
+  if (payload.summaryPdfId !== undefined) setCell("SummaryPdfId", payload.summaryPdfId, 14);
+  if (payload.summaryPdfName !== undefined) setCell("SummaryPdfName", payload.summaryPdfName, 15);
+  if (payload.sheetId !== undefined) setCell("SheetId", payload.sheetId, 16);
+
+  SpreadsheetApp.flush();
+  return getMasterConfig();
+}
+
+function saveMasterConfig(config) {
+  // Compatibility wrapper
+  if (config && config.stores) {
+    config.stores.forEach(s => saveStoreConfig(s));
+  }
 }
 
 function deleteEvent(eventId) {
   const root = getRootFolder();
+  cleanupOldMasterConfig(root);
   
   // Find or create "Archived_Deleted"
   let archiveFolder;
@@ -273,9 +431,18 @@ function deleteEvent(eventId) {
     // Ignore if not found or no permissions
   }
 
-  const config = getMasterConfig();
-  config.stores = config.stores.filter(s => s.id !== eventId);
-  saveMasterConfig(config);
+  const sheet = getStoresRegistrySheet();
+  const lastRow = sheet.getLastRow();
+  if (lastRow >= 2) {
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i]).trim() === String(eventId).trim()) {
+        sheet.deleteRow(i + 2);
+        break;
+      }
+    }
+  }
+  SpreadsheetApp.flush();
   
   return { success: true };
 }
@@ -283,6 +450,8 @@ function deleteEvent(eventId) {
 function createStore(name) {
   if (!name) throw new Error("Store name required");
   const root = getRootFolder();
+  cleanupOldMasterConfig(root);
+
   const templates = root.getFoldersByName("Template Canvassing Event");
   if (!templates.hasNext()) throw new Error("Template folder not found");
   const template = templates.next();
@@ -300,7 +469,7 @@ function createStore(name) {
   }
   newFolder.createFolder("Products");
   
-  const config = getMasterConfig();
+  const sheet = getStoresRegistrySheet();
   const newStore = {
     id: newFolder.getId(),
     name: name,
@@ -308,16 +477,39 @@ function createStore(name) {
     isOpen: false,
     closingDate: "",
     infoHtml: "Welcome to " + name,
-    bannerImageId: null,
+    bannerImageId: "",
     paynowNumber: "",
     emailProcessing: "",
-         emailConfirmed: "",
+    emailConfirmed: "",
     emailFooter: "",
-    sheetId: sheetId
+    summaryImageId: "",
+    summaryImageName: "",
+    summaryPdfId: "",
+    summaryPdfName: "",
+    sheetId: sheetId || ""
   };
-  config.stores.push(newStore);
-  saveMasterConfig(config);
-  return config;
+
+  sheet.appendRow([
+    newStore.id,
+    newStore.name,
+    newStore.eventType,
+    newStore.isOpen,
+    newStore.closingDate,
+    newStore.paynowNumber,
+    newStore.bannerImageId,
+    newStore.infoHtml,
+    newStore.emailProcessing,
+    newStore.emailConfirmed,
+    newStore.emailFooter,
+    newStore.summaryImageId,
+    newStore.summaryImageName,
+    newStore.summaryPdfId,
+    newStore.summaryPdfName,
+    newStore.sheetId
+  ]);
+  SpreadsheetApp.flush();
+
+  return getMasterConfig();
 }
 
 function getStoreProducts(eventId) {
